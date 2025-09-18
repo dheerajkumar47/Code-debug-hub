@@ -329,10 +329,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@debugkb.com
 - 🐛 Issues: [GitHub Issues](https://github.com/yourusername/debugging-knowledge-base/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/yourusername/debugging-knowledge-base/discussions)
 
 ---
 
-**Made with ❤️ by developers, for developers**
+**Made with ❤️ by Dheeraj, for developers**
