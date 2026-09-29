@@ -13,7 +13,7 @@ from . import proposal, quality
 from .config import Profile, Settings
 from .filters import rule_filter
 from .freelancer import FreelancerAuthError, FreelancerClient, FreelancerError
-from .llm import LLM
+from .llm import LLM, LLMChain
 from .models import Price, Project
 from .notify import Card, ConsoleNotifier, WebNotifier, WhatsAppNotifier
 from .pricing import compute_price
@@ -61,7 +61,10 @@ class BidSmith:
         store = Store(s.db_path)
         # Always create the client: project search is public; bidding only needs the token.
         client = FreelancerClient(s.freelancer_token or None, s.freelancer_api_url, s.freelancer_site_url)
-        llm = LLM(s.llm_provider, s.llm_api_key, s.llm_model, s.llm_base_url)
+        main = LLM(s.llm_provider, s.llm_api_key, s.llm_model, s.llm_base_url)
+        backup = LLM("openai", s.llm_fallback_key, s.llm_fallback_model, s.llm_fallback_base_url) \
+            if s.llm_fallback_key else None
+        llm = LLMChain([main, backup]) if backup else main
         notifiers = []
         for ch in s.notify_channels:
             if ch == "console":
@@ -146,7 +149,7 @@ class BidSmith:
             # Background mode: card appears instantly with a ready draft, the AI version replaces it seconds later.
             draft = proposal.write(p, self.profile, self.index, price, None if use_bg else self.llm)
             self.store.save_project(p, "pending", score)
-            self.store.save_draft(draft)
+            self._save_draft(draft)
             if use_bg:
                 self.store.kv_set(f"drafting:{p.id}", "1")
                 self._drafter.submit(self._polish_draft, p, price)
@@ -159,6 +162,14 @@ class BidSmith:
             stats["pending"] += 1
             self.push_card(p.id)
         return stats
+
+    def _save_draft(self, draft) -> None:
+        """Save a draft and remember whether the AI wrote it (shown on the card)."""
+        self.store.save_draft(draft)
+        if draft.ai:
+            self.store.kv_set(f"polished:{draft.project_id}", "1")
+        else:
+            self.store.kv_del(f"polished:{draft.project_id}")
 
     def _polish_draft(self, p: Project, price: Price) -> None:
         try:
@@ -320,6 +331,8 @@ class BidSmith:
                 "fit": proof, "text": d.get("text", ""), "amount": d.get("amount", 0),
                 "amount_usd": d.get("amount_usd", 0), "days": d.get("period_days", 7),
                 "drafting": bool(self.store.kv_get(f"drafting:{r['id']}")),
+                "ai": bool(self.store.kv_get(f"polished:{r['id']}")),
+                "edited": int(d.get("version") or 1) > 1 and not self.store.kv_get(f"polished:{r['id']}"),
                 "notes": [i for i in q.get("issues", []) if "client asked" in i],
                 "created": r["created_at"],
             })
@@ -376,7 +389,7 @@ class BidSmith:
         score = heuristic_score(p, self.profile, self.index)
         price = compute_price(p, self.profile, score.score, self.s.milestone_percentage)
         self.store.save_project(p, "pending", score)
-        self.store.save_draft(proposal.write(p, self.profile, self.index, price, self.llm))
+        self._save_draft(proposal.write(p, self.profile, self.index, price, self.llm))
         return f"✍ Bid written for #{pid} — it is at the top of your list."
 
     SOFT_REASONS = ("bids >", "too old")  # crowded or older: still worth a look if the fit is great
@@ -497,9 +510,12 @@ class BidSmith:
         if d:  # keep any manual price change
             price = Price(d["amount"], d["period_days"], d["currency"], d["amount_usd"], d["price_note"] or "",
                           d["milestone_percentage"] or self.s.milestone_percentage)
-        self.store.save_draft(proposal.write(p, self.profile, self.index, price, self.llm))
+        draft = proposal.write(p, self.profile, self.index, price, self.llm)
+        self._save_draft(draft)
         self.store.set_status(pid, "pending")
-        return f"🔁 New draft for #{pid}"
+        if draft.ai:
+            return f"🔁 New AI proposal written for #{pid}"
+        return "🔁 The AI is busy right now, so this is the ready-made draft. Press Rewrite again in a minute."
 
     def set_price(self, pid: int, amount: float, days: int | None = None) -> str:
         p, d = self.store.project_obj(pid), self.store.get_draft(pid)

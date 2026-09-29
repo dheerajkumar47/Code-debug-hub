@@ -22,7 +22,7 @@ def test_template_draft_obeys_client_instruction(make_bot, projects):
     bot.process([projects[40100002]], NOW)
     d = bot.store.get_draft(40100002)
     assert d["text"].lower().startswith("banana")
-    assert "AI Receptionist" in d["text"]
+    assert "ai receptionist" in d["text"].lower() and "github.com/dheerajkumar47/AI-receptionist" in d["text"]
 
 
 def test_llm_retry_on_failed_quality(make_bot, projects):
@@ -184,3 +184,19 @@ def test_card_gets_ai_proposal_later_if_ai_was_busy(make_bot, projects):
     bot.run_live()                             # next cycle re-polishes it
     bot._drafter.submit(lambda: None).result()
     assert bot.store.get_draft(40100001)["text"] == good
+
+
+def test_card_says_whether_the_ai_wrote_it(make_bot, projects):
+    bot = make_bot()                                    # no AI at all → basic draft
+    bot.process([projects[40100001]], NOW)
+    c = bot.live_state()["cards"][0]
+    assert c["ai"] is False and c["edited"] is False
+    bot.edit(40100001, "My own careful proposal for the RAG chatbot over your internal PDFs with FastAPI.")
+    assert bot.live_state()["cards"][0]["edited"] is True
+    good = ("You need a RAG chatbot over ~800 internal PDFs that cites sources. I built a RAG Chatbot with a "
+            "LangGraph router (Pinecone + FastAPI): https://github.com/dheerajkumar47/IntelliCourse\n"
+            "Plan: 1) ingest PDFs, 2) retrieval with citations, 3) FastAPI + React widget, 4) Docker deploy. "
+            "Which vector database do you prefer? — Dheeraj")
+    bot.llm = FakeLLM([good])
+    assert bot.regenerate(40100001).startswith("🔁 New AI proposal")
+    assert bot.live_state()["cards"][0]["ai"] is True

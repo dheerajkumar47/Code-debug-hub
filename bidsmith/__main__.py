@@ -39,7 +39,7 @@ def run_check(s: Settings) -> int:
         res = bot.llm.ping()
         if res == "ok":
             bot.remember_model()
-            print(f"✅ AI writer works ({s.llm_provider} · model {bot.llm.model})")
+            print(f"✅ AI writer works ({getattr(bot.llm, 'names', s.llm_provider)} · model {bot.llm.model})")
         elif res == "busy":
             print(f"🟡 AI key accepted; {s.llm_provider} is busy right now. Proposals start from the ready draft"
                   f" and the AI polishes them when it is free.")

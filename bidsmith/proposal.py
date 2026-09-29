@@ -11,20 +11,27 @@ from .retrieval import PortfolioIndex
 
 log = logging.getLogger(__name__)
 
-SYSTEM = """You write winning Freelancer.com bids for one specific freelancer.
+SYSTEM = """You are a senior freelance AI engineer writing a Freelancer.com proposal that wins the client's attention
+in the first two lines. You write for ONE freelancer, described in FREELANCER FACTS and PROOF.
+
 Hard rules:
-- Use ONLY facts, numbers, projects and links given in FREELANCER FACTS / PROOF. Never invent experience, years, client names or metrics.
-- {min_words}-{max_words} words, under {max_chars} characters. Plain text, no markdown headings, no emojis.
-- No greeting fluff. Banned phrases: "I hope this finds you well", "I am thrilled/excited", "delve", "seamless", "leverage", "passionate", "cutting-edge", "look no further", "top-notch", "Dear Sir".
-- Tone: {tone}. Match the client's language level.
-Structure:
-1. Hook: restate the client's actual problem in one line using THEIR specifics.
-2. Proof: the most relevant 1-2 PROOF items with what they did (include the link if given).
-3. Plan: 3-4 short numbered steps for THIS project.
-4. Answer every CLIENT QUESTION briefly. Obey every CLIENT INSTRUCTION exactly.
-5. One smart clarifying question.
-6. Close with timeline ({period} days) and sign as {signature}.
-Output ONLY the bid text."""
+- Use ONLY facts, projects and links from FREELANCER FACTS / PROOF. Never invent years, clients, metrics or reviews.
+- {min_words}-{max_words} words and under {max_chars} characters. Plain text. Short paragraphs. "•" bullets allowed.
+- Never start with "Re:", "Dear", "Hello Sir" or the project title. Never write "I hope", "I am excited/thrilled",
+  "delve", "seamless", "leverage", "passionate", "cutting-edge", "look no further", "top-notch", "kindly".
+- Sound like an expert talking to a client: specific, confident, calm. Match the client's language level.
+
+Write it in this order:
+1. Opening (1-2 sentences): show you understood THEIR goal, using their words and details. No self-introduction.
+2. How I will build it: 3-5 bullets with concrete technical choices for THIS project (name the tools, e.g. FastAPI,
+   LangGraph, pgvector, YOLO, WhatsApp Cloud API) and how each part solves a requirement from the brief.
+3. Proof: the most relevant PROOF item - what it does and why it is close to their need - with its link.
+4. Delivery: milestones inside {period} days (e.g. first working demo, then final version), what they receive
+   (code, deployment, documentation).
+5. Answer every CLIENT QUESTION directly. Obey every CLIENT INSTRUCTION exactly.
+6. One or two sharp questions that show expertise (about their data, users, integrations or success criteria).
+7. Close with a short call to action and sign as {signature}.
+Output ONLY the proposal text."""
 
 USER = """PROJECT
 Title: {title}
@@ -55,32 +62,132 @@ def _instructions_text(instr: dict) -> str:
     return "; ".join(out) or "none"
 
 
-def template_bid(p: Project, profile: Profile, proof, price: Price, instr: dict, questions: list[str]) -> str:
-    """No-LLM fallback. Plain but specific; the owner edits before sending."""
-    lines = []
-    if instr.get("start_with"):
-        lines.append(instr["start_with"])
+# --- ready-made (no-AI) proposal: specific to the brief and the type of project -------------------------------
+PLAYBOOKS = [
+    ("whatsapp", r"whats ?app|messenger|instagram dm|receptionist|appointment|booking|customer support bot",
+     ["Connect the official WhatsApp Business (Cloud) API and any other channels you use",
+      "Teach the assistant your services, prices and FAQs so it answers like your team",
+      "Add booking / CRM steps with confirmations and reminders",
+      "Human hand-over plus a simple dashboard to watch every conversation"],
+     ["Which channels do your customers use most today?", "Where are bookings or leads stored right now?"]),
+    ("rag", r"\brag\b|knowledge base|pdfs?\b|documents?|docs\b|retrieval|vector|embedding|chat with|internal data|faq",
+     ["Ingest and clean your documents with sensible chunking and metadata",
+      "Hybrid search (vector + keyword) with source citations so answers stay grounded",
+      "FastAPI backend with the LLM that fits your budget (OpenAI, Claude or Gemini) and guardrails",
+      "Chat UI or widget, tested on real questions, then Docker deployment"],
+     ["Roughly how many documents, and in which formats?", "Should every answer show its source?"]),
+    ("vision", r"vision|image|video|camera|cctv|detect|yolo|opencv|ocr|recogni[sz]|track",
+     ["Review sample images / video and agree on the accuracy target",
+      "Build or fine-tune a YOLO + OpenCV pipeline for your exact objects and scenes",
+      "Optimise for real-time speed and difficult cases (lighting, angles, occlusion)",
+      "Deliver an API or dashboard with results, plus a short evaluation report"],
+     ["Can you share a few sample images or clips?", "Will it run on a GPU server, a PC or an edge device?"]),
+    ("agent", r"agent|agentic|automat|workflow|n8n|crewai|langgraph|langchain|tool|integration",
+     ["Map the workflow step by step and define exactly what the AI may do on its own",
+      "Build the agent with LangGraph / CrewAI and tool calls to your APIs and data",
+      "Add guardrails, logging and human approval where mistakes would be costly",
+      "Test on real cases, then deploy with monitoring"],
+     ["Which systems or APIs must the agent connect to?", "Where should a human approve before the agent acts?"]),
+    ("ml", r"machine learning|\bml\b|model|predict|forecast|classif|regression|anomaly|data scien|dataset",
+     ["Explore and clean the data and agree on the success metric",
+      "Build a strong baseline, then improved models, compared with clear metrics",
+      "Package the best model behind a FastAPI endpoint",
+      "Hand over code, notebook and a short results report"],
+     ["How much labelled data is available?", "Which metric matters most to you?"]),
+]
+DEFAULT_PLAYBOOK = ("ai", "",
+                    ["Confirm scope, inputs, outputs and what success looks like",
+                     "Build the core AI feature with FastAPI and the right LLM for the job",
+                     "Integrate it with your app and test with real examples",
+                     "Deploy and hand over clean, documented code"],
+                    ["What does success look like for you in the first week?",
+                     "Is there an existing system this must fit into?"])
+
+_REQ = re.compile(r"\b(need|needs|must|should|want|require|looking for|build|create|develop|integrate|"
+                  r"able to|feature|goal|expect)\b", re.I)
+
+
+def _playbook(p: Project):
+    text = f"{p.title} {' '.join(p.skills)} {p.description[:1500]}".lower()
+    return next((pb for pb in PLAYBOOKS if re.search(pb[1], text)), DEFAULT_PLAYBOOK)
+
+
+def _requirements(p: Project, n: int = 3) -> list[str]:
+    parts = re.split(r"(?<=[.!?])\s+|\n+|;|•|- ", p.description)
+    out = []
+    for s in parts:
+        s = s.strip(" -*•\t")
+        if len(s.split()) < 4 or s.endswith("?") or not _REQ.search(s):
+            continue
+        words = s.split()
+        s = " ".join(words[:18]) + ("…" if len(words) > 18 else "")
+        out.append(s[0].upper() + s[1:])
+        if len(out) == n:
+            break
+    if not out:  # no "need/must" wording: use the first sentences of the brief
+        for s in parts[:n]:
+            s = s.strip(" -*•\t")
+            if len(s.split()) >= 4 and not s.endswith("?"):
+                words = s.split()
+                out.append(" ".join(words[:18]) + ("…" if len(words) > 18 else ""))
+    return out
+
+
+def _phases(days: int) -> str:
+    days = max(int(days or 1), 1)
+    if days <= 2:
+        return f"a working version within {days} day{'s' if days > 1 else ''}, then fixes from your feedback"
+    demo = max(1, round(days * 0.4))
+    return f"first working demo by day {demo}, final tested version by day {days}"
+
+
+def template_bid(p: Project, profile: Profile, proof, price: Price, instr: dict, questions: list[str],
+                 max_chars: int = 1500) -> str:
+    """Ready-made proposal when the AI is unavailable: structured and specific to this brief."""
+    _, _, steps, smart_qs = _playbook(p)
+    reqs = _requirements(p)
+    sign = profile.style.get("signature", profile.name)
     title = p.title.strip().rstrip(".")
-    if proof:
-        item = proof[0][0]
-        first = item.summary.strip().split(". ")[0].rstrip(".")
-        link = f"\n{item.link}" if item.link else ""
-        lines.append(f"Re: {title} - I have built a closely related system and can start right away.")
-        lines.append(f"{item.title}: {first}.{link}")
-    else:
-        lines.append(f"Re: {title} - this matches my day-to-day work ({', '.join(p.skills[:3])}).")
-    lines.append("Plan: 1) confirm scope, data and access, 2) build a working first version, "
-                 "3) test it with your real examples, 4) deploy and hand over clean, documented code.")
-    for q in questions[:2]:
-        if re.search(r"timeline|how long|deadline|when can", q, re.I):
-            lines.append(f"On \"{q}\" - {price.period_days} days for a working, tested version.")
+
+    def build(n_req: int, n_steps: int, with_second_q: bool) -> str:
+        out = []
+        if instr.get("start_with"):
+            out.append(instr["start_with"])
+        if reqs[:n_req]:
+            out.append(f"I went through your brief for \"{title}\". The key points I noted:\n"
+                       + "\n".join(f"• {r}" for r in reqs[:n_req]))
         else:
-            lines.append(f"On \"{q}\" - I will answer this in detail in chat once I see your setup.")
-    for t in instr.get("include", []):
-        lines.append(f"({t})")
-    lines.append("Quick question: what does a successful result look like for you in the first week?")
-    lines.append(f"I can deliver in {price.period_days} days. — {profile.style.get('signature', profile.name)}")
-    return "\n\n".join(lines)
+            out.append(f"I went through your brief for \"{title}\" and this is exactly the kind of system I build.")
+        out.append("How I would build it:\n" + "\n".join(f"{i}. {s}" for i, s in enumerate(steps[:n_steps], 1)))
+        if proof:
+            item = proof[0][0]
+            what = item.pitch or item.summary.strip().split(". ")[0].rstrip(".")
+            link = f"\n{item.link}" if item.link else ""
+            out.append(f"Closest work I have done: {what[0].lower() + what[1:]}.{link}".replace(
+                "Closest work I have done: ", "Closest work I have done: I built ", 1))
+        out.append(f"Delivery: {_phases(price.period_days)}. You get the full source code, deployment and "
+                   f"clear documentation.")
+        answers = []
+        for q in questions[:2]:
+            if re.search(r"timeline|how long|deadline|when can", q, re.I):
+                answers.append(f"On \"{q}\": {price.period_days} days for a tested version.")
+            else:
+                answers.append(f"On \"{q}\": I will give you a concrete recommendation as soon as I know "
+                               f"your data size and hosting, usually within the first call.")
+        if answers:
+            out.append("\n".join(answers))
+        qs = smart_qs[:2] if with_second_q else smart_qs[:1]
+        out.append("Quick question" + ("s" if len(qs) > 1 else "") + ": " + " ".join(qs))
+        for t in instr.get("include", []):
+            out.append(f"({t})")
+        out.append(f"I can start right away. Send me a message and I will share a short plan for your case.\n\n{sign}")
+        return "\n\n".join(out)
+
+    for n_req, n_steps, q2 in ((3, 4, True), (2, 4, True), (2, 3, False), (1, 3, False), (0, 3, False)):
+        text = build(n_req, n_steps, q2)
+        if len(text) <= max_chars:
+            return text
+    return text[:max_chars]
 
 
 def _obey_instructions(text: str, instr: dict) -> str:
@@ -95,7 +202,8 @@ def _obey_instructions(text: str, instr: dict) -> str:
 
 
 def _numbers(price: Price) -> tuple:
-    return (price.amount, price.amount_usd, price.period_days)
+    days = int(price.period_days or 0)
+    return (price.amount, price.amount_usd, *range(1, days + 1))
 
 
 def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm=None) -> Draft:
@@ -107,11 +215,12 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
 
     text = None
     if llm is not None and getattr(llm, "enabled", False):
-        system = SYSTEM.format(min_words=style.get("min_words", 70), max_words=style.get("max_words", 170),
+        system = SYSTEM.format(min_words=style.get("min_words", 120), max_words=style.get("max_words", 230),
                                max_chars=style.get("max_chars", 1500), tone=style.get("tone", "plain"),
                                period=price.period_days, signature=style.get("signature", profile.name))
         proof_txt = "\n".join(
-            f"- {i.title}: {i.summary.strip()} Stack: {', '.join(i.stack)}. Result: {i.result} Link: {i.link or 'n/a'}"
+            f"- {i.title}: {i.pitch or i.summary.strip()} Details: {i.summary.strip()} Stack: {', '.join(i.stack)}. "
+            f"Result: {i.result} Link: {i.link or 'n/a'}"
             for i, _ in proof) or "- (no close match; rely on skills)"
         feedback = ""
         for attempt in range(2):
@@ -136,7 +245,7 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
 
     ai = bool(text)
     if not text:
-        text = template_bid(p, profile, proof, price, instr, questions)
+        text = template_bid(p, profile, proof, price, instr, questions, int(style.get("max_chars", 1500)))
 
     text = _obey_instructions(text, instr)
     report = quality.check(text, p, corpus, style, _numbers(price))

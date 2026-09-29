@@ -62,7 +62,11 @@ def test_quality_gate(profile, projects):
             "https://github.com/dheerajkumar47/AI-receptionist\n"
             "Plan: 1) map your services and FAQs, 2) connect WhatsApp Business API and Google Calendar, "
             "3) test real booking conversations in both languages, 4) deploy and hand over. "
-            "Timeline: 7 days. Which calendar holds staff availability today? — Dheeraj")
+            "Timeline: 7 days, with a working demo on day 3 so you can try real conversations early. "
+            "You get the full source code, deployment on your server and clear documentation, and I stay "
+            "available for fixes after launch. The assistant will also hand a chat over to your staff whenever "
+            "a customer asks something it should not answer on its own. "
+            "Which calendar holds staff availability today? — Dheeraj")
     rep = quality.check(good, p, profile.corpus, profile.style, (7,))
     assert rep.passed, rep.issues
 

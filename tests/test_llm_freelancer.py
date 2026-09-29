@@ -178,3 +178,32 @@ def test_llm_cools_down_after_busy_streak():
     with pytest.raises(Exception):
         llm.complete("s", "u")
     assert n["calls"] == before          # no calls while cooling down
+
+
+def test_backup_ai_writes_when_gemini_is_busy():
+    from bidsmith.llm import LLMChain
+    used = []
+
+    def gemini(req):
+        used.append("gemini")
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": []})
+        return httpx.Response(503, json={"error": {"code": 503, "message": "high demand"}})
+
+    def groq(req):
+        used.append("groq")
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "whisper-large-v3"}, {"id": "llama-3.1-8b-instant"},
+                                                      {"id": "llama-3.3-70b-versatile"}]})
+        body = json.loads(req.content)
+        assert body["model"] == "llama-3.3-70b-versatile"
+        return httpx.Response(200, json={"choices": [{"message": {"content": "Groq proposal"}}]})
+
+    main = LLM("gemini", "G", model="gemini-x-flash", transport=httpx.MockTransport(gemini))
+    main._sleep = lambda s: None
+    backup = LLM("openai", "K", base_url="https://api.groq.com/openai/v1", transport=httpx.MockTransport(groq))
+    chain = LLMChain([main, backup])
+    assert chain.complete("s", "u") == "Groq proposal"
+    assert main.cooling and "groq" in used
+    used.clear()
+    assert chain.complete("s", "u") == "Groq proposal" and "gemini" not in used   # main skipped while cooling

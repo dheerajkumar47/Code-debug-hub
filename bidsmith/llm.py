@@ -25,8 +25,10 @@ class LLM:
                  timeout: float = 60.0, transport: httpx.BaseTransport | None = None):
         self.provider = provider.lower()
         self.api_key = api_key
-        self.model = model or DEFAULT_MODELS.get(self.provider, "")
         self.base_url = base_url.rstrip("/")
+        compatible = self.provider == "openai" and self.base_url and "api.openai.com" not in self.base_url
+        # OpenAI-compatible hosts (Groq, OpenRouter) have their own model names: discover them on first use.
+        self.model = model or ("" if compatible else DEFAULT_MODELS.get(self.provider, ""))
         self._http = httpx.Client(timeout=timeout, transport=transport)
         self._sleep = time.sleep
         self.cooldown_until = 0.0  # after a busy streak we give the provider a break
@@ -146,14 +148,39 @@ class LLM:
             raise LLMError(f"gemini: empty response {str(data)[:200]}")
         return text
 
+    # Best general-purpose models first; the first one the host offers is used.
+    OPENAI_COMPAT_PREFS = ("llama-3.3-70b", "gpt-oss-120b", "llama-4-maverick", "qwen3-32b", "llama-4-scout",
+                           "70b", "gpt-oss", "llama", "qwen", "mixtral")
+
+    def _openai_pick_model(self) -> str:
+        base = self.base_url or "https://api.openai.com/v1"
+        r = self._http.get(f"{base}/models", headers={"Authorization": f"Bearer {self.api_key}"})
+        if r.status_code >= 400:
+            raise LLMError(f"{self.provider} HTTP {r.status_code}: {r.text[:300]}")
+        ids = [m.get("id", "") for m in r.json().get("data", [])]
+        chat = [i for i in ids if not any(x in i for x in ("whisper", "tts", "guard", "embed", "vision", "audio"))]
+        for pref in self.OPENAI_COMPAT_PREFS:
+            hit = next((i for i in chat if pref in i), None)
+            if hit:
+                return hit
+        if not chat:
+            raise LLMError(f"{self.provider}: no chat model available")
+        return chat[0]
+
     def _openai(self, system, user, max_tokens, temperature):
         base = self.base_url or "https://api.openai.com/v1"
-        data = self._post(
-            f"{base}/chat/completions",
-            {"Authorization": f"Bearer {self.api_key}"},
-            {"model": self.model, "max_tokens": max_tokens, "temperature": temperature,
-             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]},
-        )
+        if not self.model:
+            self.model = self._openai_pick_model()
+        body = lambda: {"model": self.model, "max_tokens": max_tokens, "temperature": temperature,  # noqa: E731
+                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            data = self._post(f"{base}/chat/completions", headers, body())
+        except LLMError as e:  # model retired on the host → pick a current one once
+            if not any(c in str(e) for c in (" 404", "decommissioned", "model_not_found", "does not exist")):
+                raise
+            self.model = self._openai_pick_model()
+            data = self._post(f"{base}/chat/completions", headers, body())
         return data["choices"][0]["message"]["content"] or ""
 
     def _anthropic(self, system, user, max_tokens, temperature):
@@ -165,3 +192,57 @@ class LLM:
              "system": system, "messages": [{"role": "user", "content": user}]},
         )
         return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+
+class LLMChain:
+    """Main AI plus backups: if one is busy, rate-limited or cooling down, the next one writes."""
+
+    def __init__(self, llms: list[LLM]):
+        self.llms = [x for x in llms if x is not None and x.enabled]
+        self.last_used: LLM | None = None
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.llms)
+
+    @property
+    def provider(self) -> str:
+        return self.llms[0].provider if self.llms else "none"
+
+    @property
+    def model(self) -> str:
+        return self.llms[0].model if self.llms else ""
+
+    @model.setter
+    def model(self, value: str) -> None:
+        if self.llms:
+            self.llms[0].model = value
+
+    @property
+    def cooling(self) -> bool:
+        return all(x.cooling for x in self.llms)
+
+    @property
+    def names(self) -> str:
+        return " → ".join(f"{x.provider}{'(' + x.base_url.split('//')[-1].split('/')[0] + ')' if x.base_url else ''}"
+                          for x in self.llms)
+
+    def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.6) -> str:
+        last: Exception | None = None
+        for x in self.llms:
+            if x.cooling:
+                continue
+            try:
+                out = x.complete(system, user, max_tokens, temperature)
+                self.last_used = x
+                return out
+            except LLMError as e:
+                last = e
+                log.info("%s unavailable, trying the backup AI", x.provider)
+        raise last or LLMError("all AI providers are cooling down")
+
+    def ping(self) -> str:
+        results = [x.ping() for x in self.llms]
+        if "ok" in results:
+            return "ok"
+        return "busy" if "busy" in results else (results[0] if results else "no AI configured")

@@ -51,6 +51,10 @@ class Settings:
     llm_model: str = ""
     llm_base_url: str = ""  # optional, OpenAI-compatible (Groq, OpenRouter, ...)
     llm_score_enabled: bool = False
+    # Backup AI (OpenAI-compatible, e.g. Groq — free). Used automatically when the main AI is busy.
+    llm_fallback_key: str = ""
+    llm_fallback_base_url: str = "https://api.groq.com/openai/v1"
+    llm_fallback_model: str = ""
 
     # WhatsApp Cloud API (Meta, official)
     whatsapp_token: str = ""
@@ -99,6 +103,9 @@ class Settings:
             llm_model=e("LLM_MODEL", ""),
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_score_enabled=_bool(e("LLM_SCORE_ENABLED"), False),
+            llm_fallback_key=clean_secret(e("LLM_FALLBACK_KEY", "")),
+            llm_fallback_base_url=e("LLM_FALLBACK_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
+            llm_fallback_model=e("LLM_FALLBACK_MODEL", ""),
             whatsapp_token=clean_secret(e("WHATSAPP_TOKEN", "")),
             whatsapp_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
             whatsapp_verify_token=e("WHATSAPP_VERIFY_TOKEN", ""),
@@ -134,6 +141,7 @@ class PortfolioItem:
     result: str = ""
     link: str = ""
     tags: list[str] = field(default_factory=list)
+    pitch: str = ""  # one crisp sentence used in proposals
 
     @property
     def text(self) -> str:

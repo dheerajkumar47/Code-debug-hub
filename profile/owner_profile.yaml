@@ -37,6 +37,7 @@ facts:
 
 portfolio:
   - title: AI Receptionist - WhatsApp, Instagram & Messenger AI Agent with Booking
+    pitch: "an AI receptionist that answers customers 24/7 on WhatsApp, Instagram and Messenger, books appointments into Outlook and replies with voice notes in English or Urdu"
     summary: >
       Answers small-business customers 24/7 on WhatsApp, Messenger, Instagram and X, books
       appointments in Outlook/Microsoft 365, sends .ics confirmations and reminders, and replies
@@ -47,6 +48,7 @@ portfolio:
     tags: [whatsapp, chatbot, receptionist, booking, voice, customer support, messenger, instagram, calendar, ai agent]
 
   - title: Real-Time CCTV Employee Tracking - YOLO + ArUco Computer Vision
+    pitch: "a real-time system on live CCTV feeds that detects people with YOLO, identifies each employee with ArUco markers and shows trails, heatmaps and a live dashboard"
     summary: >
       Processes live RTSP camera feeds, detects people with YOLO on CUDA, identifies employees with
       ArUco markers, draws movement trails, records per-employee clips, generates heatmaps and shows
@@ -57,6 +59,7 @@ portfolio:
     tags: [computer vision, cctv, object detection, tracking, yolo, opencv, surveillance, video analytics]
 
   - title: RAG Chatbot with LangGraph Router - Pinecone + Web Search
+    pitch: "a RAG assistant where a LangGraph agent routes each question to vector search (Pinecone) or web search and answers only from the retrieved sources"
     summary: >
       Course advisor that routes each question with a LangGraph agent: a vector retriever over the
       course catalogue (Pinecone + MiniLM embeddings), a web-search tool (Tavily), and a generator
@@ -67,6 +70,7 @@ portfolio:
     tags: [rag, chatbot, langgraph, vector database, knowledge base, pdf, documents, agent]
 
   - title: AI Stock Market Intelligence Dashboard (PSX)
+    pitch: "a live PSX market dashboard with AI-generated daily summaries and a SWOT report for every company"
     summary: >
       Investor dashboard for Pakistan Stock Exchange companies: live price/volume, sector heatmaps,
       USD/PKR, watchlists, plus AI-generated daily market summaries and per-company SWOT reports.
@@ -76,6 +80,7 @@ portfolio:
     tags: [dashboard, finance, stock market, data, analytics, llm, summarization, react]
 
   - title: Multi-Agent AI Interview Platform - ATS Scoring + 4 AI Agents
+    pitch: "a multi-agent platform where four AI agents screen resumes with ATS scoring and run technical and HR interviews, with Gemini and a Groq fallback"
     summary: >
       Mock-interview platform with four agents (Resume Analyst, Technical Interviewer, Knowledge
       Assessor, HR Coach), ATS resume scoring against a job description, coding/MCQ/behavioural
@@ -86,6 +91,7 @@ portfolio:
     tags: [multi-agent, hr, recruitment, resume, ats, llm, web app]
 
   - title: AI Tutor with Long-Term Memory
+    pitch: "a multimodal AI tutor with per-user long-term memory in FAISS, quiz generation and streaming answers"
     summary: >
       Multimodal tutor (text, image, audio, documents) with per-user semantic memory in FAISS,
       LangChain function-calling agent, quiz generation, summarisation, SSE streaming, JWT auth
@@ -96,6 +102,7 @@ portfolio:
     tags: [education, chatbot, memory, rag, multimodal, agent]
 
   - title: Time-Series Anomaly Detection - Prophet + Isolation Forest
+    pitch: "an anomaly-detection service for server, finance and IoT data using Prophet and Isolation Forest, evaluated on precision, recall and F1"
     summary: >
       Detects anomalies in server metrics, financial transactions and IoT sensor data with Prophet
       and Isolation Forest, evaluated on precision, recall, F1 and AUC-ROC. FastAPI + Streamlit, Dockerised.
@@ -105,6 +112,7 @@ portfolio:
     tags: [machine learning, anomaly detection, time series, forecasting, iot, monitoring, data science]
 
   - title: AI Meeting Intelligence
+    pitch: "a meeting assistant that transcribes recordings with Whisper and answers questions about any past meeting from the transcripts"
     summary: >
       Transcribes meeting recordings with Whisper and answers questions about every past meeting
       with grounded RAG.
@@ -114,6 +122,7 @@ portfolio:
     tags: [transcription, speech to text, rag, meetings, summarization]
 
   - title: AI QA Platform - Agents Generate Test Cases
+    pitch: "a multi-agent QA platform where agents turn tickets and screenshots into test cases, run UI and API tests and report results"
     summary: >
       Multi-agent QA platform where agents generate test cases from tickets and screenshots, run UI
       and API tests, and report results.
@@ -140,8 +149,8 @@ search:
   skip_nda: true            # never auto-accept NDAs; review manually
 
 style:
-  min_words: 70
-  max_words: 170
+  min_words: 120
+  max_words: 230
   max_chars: 1500           # Freelancer bid description limit
   signature: "Dheeraj"
-  tone: "confident, plain English, specific, no fluff"
+  tone: "senior expert: confident, specific, calm, plain English, no fluff"

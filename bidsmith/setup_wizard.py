@@ -70,13 +70,20 @@ def parse_keys_file(text: str) -> dict[str, str]:
             continue
         m = re.match(r"^([A-Za-z_ ]{2,30}?)\s*[:=]\s*(\S.*)$", line)
         label = m.group(1).strip().lower() if m else ""
-        known = label and ("freelancer" in label or label in ("token", "fl") or
+        known = label and ("freelancer" in label or label in ("token", "fl") or "groq" in label or
+                           "openrouter" in label or
                            any(k in label for k in _PROVIDER_LABELS))
         if not known:
             m, label = None, ""
         value = clean_secret(m.group(2)) if m else clean_secret(line)
         if "freelancer" in label or label in ("token", "fl"):
             out["FREELANCER_OAUTH_TOKEN"] = value
+        elif "groq" in label:
+            out["LLM_FALLBACK_KEY"] = value
+            out["LLM_FALLBACK_BASE_URL"] = "https://api.groq.com/openai/v1"
+        elif "openrouter" in label:
+            out["LLM_FALLBACK_KEY"] = value
+            out["LLM_FALLBACK_BASE_URL"] = "https://openrouter.ai/api/v1"
         elif any(k in label for k in _PROVIDER_LABELS):
             prov = next(v for k, v in _PROVIDER_LABELS.items() if k in label)
             out["LLM_PROVIDER"], out["LLM_API_KEY"] = prov, value
@@ -124,7 +131,10 @@ def run(env_path: str = ".env", ask=input, ask_secret=input) -> Path:
             print(f"   ✔ Freelancer token  {mask(found['FREELANCER_OAUTH_TOKEN'])}")
         if "LLM_API_KEY" in found:
             print(f"   ✔ {found['LLM_PROVIDER']} key  {mask(found['LLM_API_KEY'])}")
-        missing = [k for k in ("FREELANCER_OAUTH_TOKEN", "LLM_API_KEY") if k not in found]
+        if "LLM_FALLBACK_KEY" in found:
+            print(f"   ✔ backup AI key  {mask(found['LLM_FALLBACK_KEY'])}")
+        missing = [k for k in ("FREELANCER_OAUTH_TOKEN", "LLM_API_KEY") if k not in found
+                   and not _current(lines, k)]  # a keys.txt with only the new key keeps the others
         for key, prompt, secret, default in REQUIRED:
             if key in missing or (key == "LLM_PROVIDER" and "LLM_API_KEY" in missing):
                 lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)

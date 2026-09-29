@@ -49,11 +49,10 @@ transition:opacity .35s,transform .35s}
 .chip.m{background:var(--chip);color:var(--chipk);border-color:transparent;font-weight:600}
 .fit{font-size:13px;color:var(--mut);margin-bottom:10px}.fit b{color:var(--ink);font-weight:600}
 .pwrap{position:relative}
-textarea{width:100%;min-height:170px;resize:vertical;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);
+textarea{width:100%;min-height:300px;resize:vertical;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);
 font:14px/1.55 Inter,system-ui,sans-serif;padding:12px 14px;outline:none}
 textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-.polish{position:absolute;top:8px;right:10px;font-size:12px;color:var(--acc);background:var(--panel);border:1px solid var(--line);
-border-radius:999px;padding:2px 9px}
+.polish{display:flex;justify-content:flex-end;font-size:12px;color:var(--acc);margin:0 2px 6px}
 .note{font-size:12.5px;color:var(--warn);margin-top:6px}
 .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:12px}
 .price{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mut);flex-wrap:wrap}
@@ -101,13 +100,16 @@ function metaHTML(c,max){return `<span><b>${esc(money(c))}</b> · ${c.type=="hou
  <span class="${bidsCls(c.bids,max)}"><b class="${bidsCls(c.bids,max)}">${c.bids}</b> bids</span>
  ${c.country?`<span>${esc(c.country)}</span>`:""}${c.verified?`<span>✓ Payment verified</span>`:""}
  ${c.reviews?`<span>★ ${Number(c.rating).toFixed(1)} (${c.reviews})</span>`:`<span>New client</span>`}`}
+function badge(c){return c.drafting?"✨ AI is writing the proposal…":c.ai?"✨ AI-written":c.edited?"✏️ Your edit":
+ '<span style="color:var(--warn)">Basic draft · AI busy · press Rewrite</span>'}
 function build(c,max){const el=document.createElement("div");el.className="card";el.dataset.id=c.id;
+ el.dataset.basic=(!c.ai&&!c.edited&&!c.drafting)?"1":"";
  el.innerHTML=`<div class="top"><div><a class="title" href="${esc(c.url)}" target="_blank" rel="noopener">${c.posted_s!=null&&c.posted_s<600?'<span class="new">NEW</span>':""}${esc(c.title)}</a></div>
  <div class="ago" data-k="ago">${ago(c.posted_s)}</div></div>
  <div class="meta" data-k="meta">${metaHTML(c,max)}</div>
  <div class="chips">${c.skills.map(s=>`<span class="chip ${s.match?"m":""}">${esc(s.name)}</span>`).join("")}</div>
  ${c.fit?`<div class="fit">Matches your work: <b>${esc(c.fit)}</b></div>`:""}
- <div class="pwrap"><textarea data-k="text">${esc(c.text)}</textarea><span class="polish" data-k="polish" style="display:${c.drafting?"":"none"}">✨ AI is polishing…</span></div>
+ <div class="pwrap"><div class="polish" data-k="polish">${badge(c)}</div><textarea data-k="text">${esc(c.text)}</textarea></div>
  <div class="note" data-k="notes">${c.notes.map(esc).join("<br>")}</div>
  <div class="foot"><div class="price">Price <input data-k="amount" type="number" min="1" step="1" value="${Math.round(c.amount)}"> ${esc(c.currency)}${c.currency!="USD"?` <span title="US dollars">≈ $${Math.round(c.amount_usd)}</span>`:""}
  &nbsp;Delivery <input data-k="days" type="number" min="1" step="1" value="${c.days}"> days</div>
@@ -119,11 +121,13 @@ function build(c,max){const el=document.createElement("div");el.className="card"
  el.querySelector('[data-a=rewrite]').onclick=()=>{dirty.delete(c.id);act(c.id,"rewrite",el,false)};
  return el}
 function update(el,c,max){el.querySelector('[data-k=ago]').textContent=ago(c.posted_s);el.querySelector('[data-k=meta]').innerHTML=metaHTML(c,max);
- el.querySelector('[data-k=polish]').style.display=c.drafting?"":"none";el.querySelector('[data-k=notes]').innerHTML=c.notes.map(esc).join("<br>");
+ el.querySelector('[data-k=polish]').innerHTML=badge(c);el.dataset.basic=(!c.ai&&!c.edited&&!c.drafting)?"1":"";el.querySelector('[data-k=notes]').innerHTML=c.notes.map(esc).join("<br>");
  const ta=el.querySelector('[data-k=text]');if(!dirty.has(c.id)&&document.activeElement!==ta&&ta.value!==c.text)ta.value=c.text;
  const am=el.querySelector('[data-k=amount]');if(!dirty.has(c.id)&&document.activeElement!==am)am.value=Math.round(c.amount)}
 function removeCard(id){const el=cards.get(id);if(!el)return;el.classList.add("leave");setTimeout(()=>el.remove(),350);cards.delete(id);dirty.delete(id)}
-async function apply(id,el){const b=el.querySelector('[data-a=apply]');b.disabled=true;
+async function apply(id,el){const b=el.querySelector('[data-a=apply]');
+ if(el.dataset.basic&&!dirty.has(id)&&!confirm("This is the basic draft (the AI was busy). A stronger AI proposal usually wins more.\n\nApply with the basic draft anyway?"))return;
+ b.disabled=true;
  const body={text:el.querySelector('[data-k=text]').value,amount:+el.querySelector('[data-k=amount]').value,days:+el.querySelector('[data-k=days]').value};
  if(!autoBid){try{await navigator.clipboard.writeText(body.text)}catch(e){const ta=el.querySelector('[data-k=text]');ta.select();document.execCommand("copy")}
   window.open(el.querySelector(".title").href,"_blank");b.textContent="Mark applied";b.disabled=false;

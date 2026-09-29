@@ -61,3 +61,17 @@ def test_keys_file_unlabeled_lines(tmp_path, monkeypatch):
     from bidsmith.setup_wizard import parse_keys_file
     out = parse_keys_file(f"{FL}\n\n{AI}\n")
     assert out == {"FREELANCER_OAUTH_TOKEN": FL, "LLM_PROVIDER": "gemini", "LLM_API_KEY": AI}
+
+
+def test_keys_file_with_groq_backup(tmp_path, monkeypatch):
+    from bidsmith.setup_wizard import parse_keys_file
+    out = parse_keys_file(f"FREELANCER: {FL}\nGEMINI: {AI}\nGROQ: gsk_abcdefghijklmnopqrstuvwxyz123456\n")
+    assert out["LLM_FALLBACK_KEY"].startswith("gsk_")
+    assert out["LLM_FALLBACK_BASE_URL"] == "https://api.groq.com/openai/v1"
+    # a keys.txt containing only the new Groq key keeps the existing keys
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(f"FREELANCER_OAUTH_TOKEN={FL}\nLLM_API_KEY={AI}\n")
+    (tmp_path / "keys.txt").write_text("GROQ: gsk_abcdefghijklmnopqrstuvwxyz123456\n")
+    text = run(".env", ask=lambda _: (_ for _ in ()).throw(AssertionError("should not ask")),
+               ask_secret=lambda _: (_ for _ in ()).throw(AssertionError("should not ask"))).read_text()
+    assert f"FREELANCER_OAUTH_TOKEN={FL}" in text and "LLM_FALLBACK_KEY=gsk_" in text

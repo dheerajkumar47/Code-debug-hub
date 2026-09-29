@@ -31,6 +31,20 @@ You put both into **one Notepad file** called `keys.txt` (Part 5). You never ope
 
 ✅ You now have 2 keys in Notepad.
 
+
+## PART 2B: Free backup AI key: Groq (2 min, strongly recommended)
+Gemini's free tier is often busy (errors 503/429). With a Groq key, the bot switches to Groq automatically,
+so every card gets a full AI-written proposal.
+1. Go to **https://console.groq.com** and sign in with Google.
+2. Open **API Keys** → **Create API Key**, name it `bidsmith`, then **Submit**.
+3. Copy the key. It starts with **`gsk_`**.
+4. Add it as a new line in `keys.txt` (Part 5):
+   ```
+   GROQ: gsk_your-key-here
+   ```
+   **Already running the bot?** Make a new `keys.txt` with **only** the `GROQ:` line, save it in the bot folder,
+   then double-click `start.bat`. Your other keys are kept.
+
 ## PART 3: Install Python (5 min, once)
 1. Go to **https://www.python.org/downloads/**
 2. Click the yellow **Download Python 3.12.x** (or newer) button.
@@ -60,6 +74,7 @@ You put both into **one Notepad file** called `keys.txt` (Part 5). You never ope
    ```
    FREELANCER: paste-your-freelancer-token-here
    GEMINI: paste-your-gemini-key-here
+   GROQ: paste-your-groq-key-here
    ```
    - The Freelancer token goes all on **one line**. Don't add spaces inside it.
 3. Click **File → Save As**:
