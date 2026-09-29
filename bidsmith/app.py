@@ -45,7 +45,7 @@ class BidSmith:
         self.llm = llm
         self.index = PortfolioIndex(profile.portfolio)
         self.notifiers = notifiers if notifiers is not None else [ConsoleNotifier()]
-        self._drafter = ThreadPoolExecutor(max_workers=2, thread_name_prefix="draft")
+        self._drafter = ThreadPoolExecutor(max_workers=1, thread_name_prefix="draft")
         remembered = store.kv_get("llm_model")
         if llm is not None and remembered and not settings.llm_model:
             llm.model = remembered  # a model that worked last time (Google retires names)
@@ -166,8 +166,9 @@ class BidSmith:
             better = proposal.write(p, self.profile, self.index, price, self.llm)
             row, now_d = self.store.get_project(p.id), self.store.get_draft(p.id) or {}
             # never overwrite your own edits, and don't touch a project you already applied to
-            if row and row["status"] == "pending" and now_d.get("version") == before:
+            if better.ai and row and row["status"] == "pending" and now_d.get("version") == before:
                 self.store.save_draft(better)
+                self.store.kv_set(f"polished:{p.id}", "1")
         except Exception as e:
             log.warning("AI draft for #%s failed, keeping the ready draft: %s", p.id, e)
         finally:
@@ -204,12 +205,35 @@ class BidSmith:
                 log.error("keyword search failed: %s", e)
         stats = self.process(list(found.values()), now)
         stats["expired"] = self.refresh_open_cards()
+        self._repolish_one()
         stats["scanned"] = len(found)
         self._count_today("checked", stats["new"])
         self._count_today("matched", stats["pending"])
         self.store.kv_set("last_poll", str(now))
         self.remember_model()
         return stats
+
+    def _repolish_one(self) -> None:
+        """If the AI was busy when a card arrived, let it write that card's proposal now (one per cycle)."""
+        if not (self.s.background_drafts and self.llm is not None and getattr(self.llm, "enabled", False)):
+            return
+        if getattr(self.llm, "cooling", False):
+            return
+        for r in self.store.list_projects(("pending",), 50):
+            pid = r["id"]
+            if self.store.kv_get(f"polished:{pid}") or self.store.kv_get(f"drafting:{pid}"):
+                continue
+            d = self.store.get_draft(pid) or {}
+            if d.get("version", 1) != 1:  # you edited it — leave it alone
+                continue
+            p = self.store.project_obj(pid)
+            if not p:
+                continue
+            price = Price(d["amount"], d["period_days"], d["currency"], d["amount_usd"], d.get("price_note") or "",
+                          d.get("milestone_percentage") or self.s.milestone_percentage)
+            self.store.kv_set(f"drafting:{pid}", "1")
+            self._drafter.submit(self._polish_draft, p, price)
+            return
 
     def _count_today(self, name: str, n: int) -> int:
         """Per-day counters shown on the dashboard (reset at midnight, local time)."""
@@ -230,6 +254,11 @@ class BidSmith:
             p = self.store.project_obj(r["id"])
             if p and p.time_submitted and now - p.time_submitted <= max_age:
                 recent.append(p)
+        from .scoring import has_core_need
+        for r in self.store.list_projects(("pending",), 200):  # cards from older, looser rules
+            p = self.store.project_obj(r["id"])
+            if p and not has_core_need(p):
+                self.store.set_status(r["id"], "expired", "not an AI project")
         stats = self.process(recent, now, recheck=True) if recent else {"pending": 0}
         self._count_today("matched", stats.get("pending", 0))
         return stats

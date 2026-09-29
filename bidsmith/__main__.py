@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  Dashboard on this PC:     http://localhost:{a.port}"
           f"\n  Dashboard on your phone:  http://{lan}:{a.port}   (same Wi-Fi)"
           f"\n  Login: {s.dashboard_user} / (DASHBOARD_PASSWORD in .env)\n")
-    uvicorn.run(create_app(bot), host=a.host, port=a.port)
+    uvicorn.run(create_app(bot), host=a.host, port=a.port, access_log=False)
     return 0
 
 

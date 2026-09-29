@@ -156,3 +156,31 @@ def test_background_draft_shows_card_instantly_then_polishes(make_bot, projects)
     bot._drafter.shutdown(wait=True)
     card = bot.live_state()["cards"][0]
     assert not card["drafting"] and card["text"] == good
+
+
+def test_card_gets_ai_proposal_later_if_ai_was_busy(make_bot, projects):
+    good = ("You need a RAG chatbot over ~800 internal PDFs that cites sources. I built a RAG Chatbot with a "
+            "LangGraph router (Pinecone + FastAPI): https://github.com/dheerajkumar47/IntelliCourse\n"
+            "Plan: 1) ingest PDFs, 2) retrieval with citations, 3) FastAPI + React widget, 4) Docker deploy. "
+            "Which vector database do you prefer? — Dheeraj")
+
+    class FlakyLLM(FakeLLM):
+        busy = True
+
+        def complete(self, *a, **k):
+            if self.busy:
+                raise RuntimeError("gemini HTTP 503 busy")
+            return super().complete(*a, **k)
+
+    llm = FlakyLLM([good])
+    bot = make_bot(llm=llm, background_drafts=True)
+    import dataclasses, time as _t
+    bot.client.projects = []
+    bot.process([dataclasses.replace(projects[40100001], time_submitted=int(_t.time()) - 60)])
+    bot._drafter.submit(lambda: None).result()
+    first = bot.store.get_draft(40100001)["text"]
+    assert first != good                       # AI busy → ready-made draft stays
+    llm.busy = False
+    bot.run_live()                             # next cycle re-polishes it
+    bot._drafter.submit(lambda: None).result()
+    assert bot.store.get_draft(40100001)["text"] == good

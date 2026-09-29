@@ -91,3 +91,4 @@ class Draft:
     price: Price
     quality: QualityReport
     portfolio_used: list[str] = field(default_factory=list)
+    ai: bool = False  # True when the AI wrote it (False = ready-made draft)

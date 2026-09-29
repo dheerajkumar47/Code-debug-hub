@@ -103,3 +103,14 @@ def test_real_world_chatbot_project_with_extra_tags_still_matches(profile):
     off = _real_style_project(title="Logo and brand kit", description="Modern logo for a bakery.",
                               skills=["Logo Design", "Graphic Design", "Illustrator"], bid_count=5)
     assert heuristic_score(off, profile, PortfolioIndex(profile.portfolio), NOW).score < 40
+
+
+def test_generic_automation_project_is_not_a_match(profile):
+    adobe = _real_style_project(title="Adobe Publishing Automation Script",
+                                description="Write a script to automate exporting InDesign files to PDF.",
+                                skills=["Adobe Photoshop", "Automation", "Scripting", "Python"], bid_count=3)
+    assert heuristic_score(adobe, profile, PortfolioIndex(profile.portfolio), NOW).score < 60
+    vision = _real_style_project(title="Micron-Level Vision Calibration",
+                                 description="Calibrate a camera system for precise measurement.",
+                                 skills=["Computer Vision", "OpenCV", "Python"], bid_count=3)
+    assert heuristic_score(vision, profile, PortfolioIndex(profile.portfolio), NOW).score >= 60

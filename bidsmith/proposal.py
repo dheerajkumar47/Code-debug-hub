@@ -126,7 +126,7 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
             try:
                 text = llm.complete(system, user)
             except Exception as e:
-                log.warning("LLM draft failed: %s", e)
+                log.warning("AI busy, using the ready draft for now (%s)", " ".join(str(e).split())[:90])
                 text = None
                 break
             report = quality.check(text, p, corpus, style, _numbers(price))
@@ -134,10 +134,11 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
                 break
             feedback = "PREVIOUS DRAFT FAILED CHECKS — fix these: " + "; ".join(report.issues)
 
+    ai = bool(text)
     if not text:
         text = template_bid(p, profile, proof, price, instr, questions)
 
     text = _obey_instructions(text, instr)
     report = quality.check(text, p, corpus, style, _numbers(price))
     return Draft(project_id=p.id, text=text, price=price, quality=report,
-                 portfolio_used=[i.title for i, _ in proof])
+                 portfolio_used=[i.title for i, _ in proof], ai=ai)

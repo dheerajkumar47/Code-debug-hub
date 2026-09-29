@@ -158,3 +158,23 @@ def test_search_asks_for_fresh_projects_and_falls_back_if_rejected():
     assert seen[0]["from_time"] == "123" and "from_time" not in seen[1]
     c.search_active("rag", from_time=123)
     assert "from_time" not in seen[2]          # remembered: no repeated failing calls
+
+
+def test_llm_cools_down_after_busy_streak():
+    n = {"calls": 0}
+
+    def handler(req):
+        n["calls"] += 1
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": []})
+        return httpx.Response(429, json={"error": {"code": 429, "message": "rate limit"}})
+
+    llm = LLM("gemini", "KEY", model="gemini-x-flash", transport=httpx.MockTransport(handler))
+    llm._sleep = lambda s: None
+    with pytest.raises(Exception):
+        llm.complete("s", "u")
+    assert llm.cooling
+    before = n["calls"]
+    with pytest.raises(Exception):
+        llm.complete("s", "u")
+    assert n["calls"] == before          # no calls while cooling down

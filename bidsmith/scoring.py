@@ -129,6 +129,20 @@ def red_flags(p: Project) -> list[str]:
     return [label for pat, label in RED_FLAGS if re.search(pat, text)]
 
 
+# Your core specialties. A project must need at least one of these to reach you;
+# generic tags like "Automation", "Python" or "Script" alone are not enough.
+CORE_SKILLS = {"ai development", "ai chatbot", "ai agents", "large language models", "rag", "langchain",
+               "langgraph", "openai", "gemini", "claude", "computer vision", "opencv", "yolo", "machine learning",
+               "nlp", "whatsapp api", "crewai", "llamaindex", "pytorch", "tensorflow", "speech recognition"}
+CORE_TITLE = re.compile(r"\b(ai|a\.i\.|llm|gpt|chat ?gpt|chat ?bot|chatbot|agent|agents|agentic|rag|langchain|"
+                        r"langgraph|openai|gemini|claude|machine learning|ml|deep learning|computer vision|"
+                        r"vision|yolo|opencv|nlp|whatsapp|voice ?bot|voice ai|ocr|detection|embedding|vector)\b", re.I)
+
+
+def has_core_need(p: Project) -> bool:
+    return any(_norm(t) in CORE_SKILLS for t in p.skills) or bool(CORE_TITLE.search(p.title))
+
+
 def heuristic_score(p: Project, profile: Profile, index: PortfolioIndex, now: float | None = None) -> ScoreResult:
     now = now or time.time()
     s1, r1 = _skill_score(p, profile)
@@ -143,6 +157,9 @@ def heuristic_score(p: Project, profile: Profile, index: PortfolioIndex, now: fl
     total = s1 + s2 + s3 + s4 + s5 + s6 - 12 * len(flags)
     if s1 < 5:  # cannot deliver → cap hard
         total = min(total, 35)
+    if not has_core_need(p):  # not an AI / ML / vision / chatbot project → never a card
+        total = min(total, 45)
+        r1 = r1 + ["no core AI skill needed"]
     score = int(max(0, min(100, round(total))))
     return ScoreResult(score=score, reasons=r1 + [r2, r3, r4, r5, r6], red_flags=flags)
 

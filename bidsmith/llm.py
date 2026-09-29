@@ -29,6 +29,13 @@ class LLM:
         self.base_url = base_url.rstrip("/")
         self._http = httpx.Client(timeout=timeout, transport=transport)
         self._sleep = time.sleep
+        self.cooldown_until = 0.0  # after a busy streak we give the provider a break
+
+    COOLDOWN_SECONDS = 90
+
+    @property
+    def cooling(self) -> bool:
+        return time.time() < self.cooldown_until
 
     @property
     def enabled(self) -> bool:
@@ -60,15 +67,22 @@ class LLM:
     def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.6) -> str:
         if not self.enabled:
             raise LLMError("LLM not configured")
+        if self.cooling:
+            raise LLMError(f"{self.provider} cooling down after being busy")
         fn = {"gemini": self._gemini, "openai": self._openai, "anthropic": self._anthropic}[self.provider]
-        return fn(system, user, max_tokens, temperature).strip()
+        try:
+            return fn(system, user, max_tokens, temperature).strip()
+        except LLMError as e:
+            if any(c in str(e) for c in (" 429", " 500", " 502", " 503", " 504")):
+                self.cooldown_until = time.time() + self.COOLDOWN_SECONDS
+            raise
 
     # ------------------------------------------------------------------
     def _post(self, url: str, headers: dict, body: dict) -> dict:
         for wait in (2, 6, 0):  # retry briefly when the provider is busy
             r = self._http.post(url, headers=headers, json=body)
             if r.status_code in (429, 500, 502, 503, 504) and wait:
-                log.info("%s busy (HTTP %s), retrying in %ss", self.provider, r.status_code, wait)
+                log.debug("%s busy (HTTP %s), retrying in %ss", self.provider, r.status_code, wait)
                 self._sleep(wait)
                 continue
             break
@@ -123,7 +137,7 @@ class LLM:
                     new = self._gemini_pick_model("", exclude=self.model)
                 if not new or new == self.model:
                     raise
-                log.warning("Gemini model %s %s, switching to %s", self.model,
+                log.info("Gemini model %s %s, switching to %s", self.model,
                             "unavailable" if retired else "busy", new)
                 self.model = new
         parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
