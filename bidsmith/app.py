@@ -179,7 +179,10 @@ class BidSmith:
             self.store.set_status(pid, "bid_failed", str(e))
             self.store.save_bid(pid, None, d["amount"], d["amount_usd"], d["period_days"], "failed",
                                 {"error": str(e)})
-            return f"❌ Bid failed on #{pid}: {e}"
+            hint = ""
+            if any(k in str(e).lower() for k in ("scope", "permission", "unauthorized", "forbidden", "403")):
+                hint = " — your token can't place bids yet. Use 📋 Copy on the dashboard and paste the bid on Freelancer."
+            return f"❌ Bid failed on #{pid}: {e}{hint}"
         bid_id = (res or {}).get("id")
         self.store.save_bid(pid, bid_id, d["amount"], d["amount_usd"], d["period_days"], "placed", res)
         self.store.set_status(pid, "auto_bid" if source == "auto" else "bid_placed", f"bid {bid_id}")

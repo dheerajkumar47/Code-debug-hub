@@ -11,12 +11,14 @@ Official Freelancer API → rule filter → fit score (0-100) → portfolio matc
 ```
 
 ## Quick start
+**Fastest:** follow **[docs/07-QUICK-START.md](docs/07-QUICK-START.md)**: 2 keys, then double-click `start.bat`.
+
 ```bash
 pip install -r requirements.txt
 python -m bidsmith setup     # paste your tokens (hidden), writes .env
 python -m bidsmith check     # verifies them
 python -m bidsmith demo      # offline demo on sample projects, no keys needed
-pytest -q                    # 19 tests
+pytest -q                    # 20 tests
 ```
 Full setup (Freelancer token, WhatsApp Cloud API, AI key, hosting): **[docs/04-setup.md](docs/04-setup.md)**
 

@@ -7,12 +7,14 @@ import re
 import secrets
 from pathlib import Path
 
-FIELDS = [
+REQUIRED = [
     # key, prompt, secret, default
-    ("FREELANCER_OAUTH_TOKEN", "Freelancer token (Generate Token button)", True, ""),
-    ("LLM_PROVIDER", "AI provider: gemini / openai / anthropic / none", False, "gemini"),
-    ("LLM_API_KEY", "AI API key (Enter to skip = template drafts)", True, ""),
-    ("OWNER_WHATSAPP", "Your WhatsApp number, e.g. 923001234567 (Enter to skip)", False, ""),
+    ("FREELANCER_OAUTH_TOKEN", "1/2  Freelancer token (Generate Token button)", True, ""),
+    ("LLM_PROVIDER", "     AI provider: gemini / openai / anthropic / none", False, "gemini"),
+    ("LLM_API_KEY", "2/2  AI API key (free Gemini key from aistudio.google.com)", True, ""),
+]
+WHATSAPP = [
+    ("OWNER_WHATSAPP", "Your WhatsApp number, e.g. 923001234567", False, ""),
     ("WHATSAPP_TOKEN", "WhatsApp Cloud API token (Enter to skip)", True, ""),
     ("WHATSAPP_PHONE_NUMBER_ID", "WhatsApp phone number ID (Enter to skip)", False, ""),
     ("WHATSAPP_APP_SECRET", "Meta app secret (Enter to skip)", True, ""),
@@ -42,21 +44,28 @@ def _current(lines: list[str], key: str) -> str:
     return ""
 
 
+def _ask_field(lines, key, prompt, secret, default, ask, ask_secret) -> list[str]:
+    cur = _current(lines, key)
+    shown = ("set" if cur else "empty") if secret else (cur or default or "empty")
+    val = (ask_secret if secret else ask)(f"{prompt} [{shown}]: ").strip()
+    if not val:
+        val = cur or default
+    if key == "OWNER_WHATSAPP":
+        val = "".join(ch for ch in val if ch.isdigit())
+    return _set(lines, key, val)
+
+
 def run(env_path: str = ".env", ask=input, ask_secret=getpass.getpass) -> Path:
     path = Path(env_path)
     lines = _read_env(path)
     print(f"Writing {path.resolve()} (this file stays on your computer; it is git-ignored).")
     print("Secrets are hidden while you type/paste. Press Enter to keep the current value.\n")
     channels = ["web", "console"]
-    for key, prompt, secret, default in FIELDS:
-        cur = _current(lines, key)
-        shown = ("set" if cur else "empty") if secret else (cur or default or "empty")
-        val = (ask_secret if secret else ask)(f"{prompt} [{shown}]: ").strip()
-        if not val:
-            val = cur or default
-        if key == "OWNER_WHATSAPP":
-            val = "".join(ch for ch in val if ch.isdigit())
-        lines = _set(lines, key, val)
+    for key, prompt, secret, default in REQUIRED:
+        lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
+    if ask("\nSet up WhatsApp now? You can do it later. (y/N): ").strip().lower().startswith("y"):
+        for key, prompt, secret, default in WHATSAPP:
+            lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
     if _current(lines, "WHATSAPP_TOKEN") and _current(lines, "WHATSAPP_PHONE_NUMBER_ID"):
         channels.insert(0, "whatsapp")
     lines = _set(lines, "NOTIFY_CHANNELS", ",".join(channels))

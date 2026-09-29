@@ -169,13 +169,19 @@ def render(bot: BidSmith, rows: list[dict], done: list[dict]) -> str:
  · Days <input name=days type=number value="{d.get('period_days', 7)}"> <button>Save</button></div></form>
 <div class=row>
 <form method=post action="/p/{pid}/approve"><button class=go>✅ Place bid</button></form>
+<button type=button onclick="copyDraft({pid},this)">📋 Copy</button>
+<a href="{e(r['url'])}" target=_blank rel=noopener><button type=button>↗ Open</button></a>
 <form method=post action="/p/{pid}/regen"><button class=pri>🔁 Regenerate</button></form>
 <form method=post action="/p/{pid}/skip"><button class=no>⏭ Skip</button></form></div></div>""")
     hist = "".join(f"<li>{e(r['status'])} · <a href='{e(r['url'])}'>{e(r['title'][:60])}</a></li>" for r in done)
     stats = bot.store.stats()
     return f"""<!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><title>BidSmith</title><style>{CSS}</style>
-<script>const m=new URLSearchParams(location.search).get('msg');</script></head><body><main>
+<script>const m=new URLSearchParams(location.search).get('msg');
+function copyDraft(id,btn){{const t=document.querySelector('#p'+id+' textarea');
+const done=()=>btn.textContent='✔ Copied';
+if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(t.value).then(done);}}
+else{{t.select();document.execCommand('copy');done();}}}}</script></head><body><main>
 <h1>BidSmith · {len(rows)} pending</h1>
 <script>if(m)document.write('<div class=msg>'+m.replace(/</g,'&lt;')+'</div>')</script>
 <div class="row m">{e(json.dumps(stats))}

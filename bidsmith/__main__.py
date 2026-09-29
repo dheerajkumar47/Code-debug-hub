@@ -12,6 +12,43 @@ from .config import Settings
 from .freelancer import parse_project
 
 
+def run_check(s: Settings) -> int:
+    """Live checks with plain ✅ / ❌ lines, so problems are obvious."""
+    ok = True
+
+    def line(good: bool, text: str):
+        nonlocal ok
+        ok = ok and good
+        print(("✅ " if good else "❌ ") + text)
+
+    bot = BidSmith.from_settings(s)
+    if not bot.client:
+        line(False, "Freelancer token missing → run: python -m bidsmith setup")
+    else:
+        try:
+            line(True, f"Freelancer token works (your user id {bot.client.self_id()})")
+            found = bot.client.search_active("chatbot", limit=3)
+            line(True, f"Project search works ({len(found)} live 'chatbot' projects returned)")
+        except Exception as e:
+            line(False, f"Freelancer API error: {e}")
+    if bot.llm and bot.llm.enabled:
+        try:
+            reply = bot.llm.complete("Reply with one word.", "Say OK", max_tokens=20)
+            line(True, f"AI writer works ({s.llm_provider}: {reply[:20]!r})")
+        except Exception as e:
+            line(False, f"AI key error ({s.llm_provider}): {e}")
+    else:
+        print("⚠️  No AI key → drafts use the simple template (works, but add a free Gemini key for best bids)")
+    if "whatsapp" in s.notify_channels:
+        good = bool(s.whatsapp_token and s.whatsapp_phone_number_id and s.owner_whatsapp)
+        line(good, "WhatsApp settings present" if good else "WhatsApp enabled but settings missing")
+    else:
+        print("ℹ️  WhatsApp off → approve bids on the dashboard (add WhatsApp later with: python -m bidsmith setup)")
+    line(bool(s.dashboard_password), "Dashboard password set" if s.dashboard_password else "DASHBOARD_PASSWORD missing")
+    print("\nReady! Start with: python -m bidsmith serve" if ok else "\nFix the ❌ lines, then run check again.")
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="bidsmith")
     ap.add_argument("cmd", choices=["setup", "serve", "run-once", "demo", "check"])
@@ -30,23 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     s = Settings.load(a.env)
 
     if a.cmd == "check":
-        problems = []
-        if not s.freelancer_token:
-            problems.append("FREELANCER_OAUTH_TOKEN missing (needed to search and bid)")
-        if s.llm_provider == "none" or not s.llm_api_key:
-            problems.append("No LLM configured — template drafts only (set LLM_PROVIDER + LLM_API_KEY)")
-        if "whatsapp" in s.notify_channels and not (s.whatsapp_token and s.whatsapp_phone_number_id and s.owner_whatsapp):
-            problems.append("WhatsApp enabled but WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID / OWNER_WHATSAPP missing")
-        if "web" in s.notify_channels and not s.dashboard_password:
-            problems.append("Web dashboard enabled but DASHBOARD_PASSWORD not set")
-        bot = BidSmith.from_settings(s)
-        if bot.client:
-            try:
-                problems.append(f"OK: Freelancer user id {bot.client.self_id()}")
-            except Exception as e:
-                problems.append(f"Freelancer API error: {e}")
-        print("\n".join(problems) or "All good.")
-        return 0
+        return run_check(s)
 
     if a.cmd == "demo":
         # Offline run on a saved API response: no Freelancer token, no bids placed.
@@ -70,8 +91,19 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(bot.run_once(), indent=2))
         return 0
 
+    import socket
+
     import uvicorn
     from .web import create_app
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect(("8.8.8.8", 80))
+            lan = sk.getsockname()[0]
+    except OSError:
+        lan = "your-pc-ip"
+    print(f"\n  Dashboard on this PC:     http://localhost:{a.port}"
+          f"\n  Dashboard on your phone:  http://{lan}:{a.port}   (same Wi-Fi)"
+          f"\n  Login: {s.dashboard_user} / (DASHBOARD_PASSWORD in .env)\n")
     uvicorn.run(create_app(bot), host=a.host, port=a.port)
     return 0
 

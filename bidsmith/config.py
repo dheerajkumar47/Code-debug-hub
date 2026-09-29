@@ -55,10 +55,10 @@ class Settings:
     # Pipeline
     notify_channels: list[str] = field(default_factory=lambda: ["web", "console"])
     poll_interval_seconds: int = 180
-    score_threshold: int = 60
+    score_threshold: int = 70
     auto_submit: bool = False
     auto_submit_min_score: int = 85
-    max_bids_per_day: int = 10
+    max_bids_per_day: int = 5
     min_seconds_between_bids: int = 90
     milestone_percentage: int = 50
 
@@ -93,10 +93,10 @@ class Settings:
             public_base_url=e("PUBLIC_BASE_URL", "").rstrip("/"),
             notify_channels=channels,
             poll_interval_seconds=_int(e("POLL_INTERVAL_SECONDS"), 180),
-            score_threshold=_int(e("SCORE_THRESHOLD"), 60),
+            score_threshold=_int(e("SCORE_THRESHOLD"), 70),
             auto_submit=_bool(e("AUTO_SUBMIT"), False),
             auto_submit_min_score=_int(e("AUTO_SUBMIT_MIN_SCORE"), 85),
-            max_bids_per_day=_int(e("MAX_BIDS_PER_DAY"), 10),
+            max_bids_per_day=_int(e("MAX_BIDS_PER_DAY"), 5),
             min_seconds_between_bids=_int(e("MIN_SECONDS_BETWEEN_BIDS"), 90),
             milestone_percentage=_int(e("MILESTONE_PERCENTAGE"), 50),
             db_path=e("DB_PATH", cls.db_path),
