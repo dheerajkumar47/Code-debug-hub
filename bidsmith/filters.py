@@ -1,6 +1,7 @@
 """Stage 1: cheap, deterministic rules. A project must pass all of them."""
 from __future__ import annotations
 
+import re
 import time
 
 from .config import Profile
@@ -28,7 +29,7 @@ def rule_filter(p: Project, profile: Profile, now: float | None = None) -> tuple
 
     max_age_h = float(s.get("max_age_hours", 0) or 0)
     if max_age_h and p.time_submitted and (now - p.time_submitted) > max_age_h * 3600:
-        fails.append("too old")
+        fails.append(f"too old ({(now - p.time_submitted) / 3600:.0f}h)")
 
     if s.get("require_payment_verified") and not p.client.payment_verified:
         fails.append("client payment not verified")
@@ -47,7 +48,8 @@ def rule_filter(p: Project, profile: Profile, now: float | None = None) -> tuple
 
     text = p.text.lower()
     for kw in s.get("exclude_keywords", []):
-        if kw.lower() in text:
+        # whole words only: "exam" must not match "example"
+        if re.search(rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])", text):
             fails.append(f"excluded keyword '{kw}'")
             break
 

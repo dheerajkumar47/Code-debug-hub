@@ -16,6 +16,21 @@ def _bool(v: str | None, default: bool = False) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def clean_secret(v: str | None) -> str:
+    """Remove what copy-paste often adds: spaces, quotes, 'Bearer ', control characters."""
+    v = "".join(ch for ch in (v or "") if ch.isprintable() or ch.isspace()).strip().strip("\"'`").strip()
+    if v.lower().startswith("bearer "):
+        v = v[7:].strip()
+    # A key never contains spaces: if other text came along with the paste, keep the longest piece.
+    if any(ch.isspace() for ch in v):
+        v = max(v.split(), key=len)
+    return v.strip("\"'`[](){}<>:;,")
+
+
+def mask(v: str) -> str:
+    return f"{len(v)} chars ({v[:4]}…{v[-4:]})" if len(v) >= 12 else f"{len(v)} chars"
+
+
 def _int(v: str | None, default: int) -> int:
     try:
         return int(v) if v not in (None, "") else default
@@ -55,6 +70,9 @@ class Settings:
     # Pipeline
     notify_channels: list[str] = field(default_factory=lambda: ["web", "console"])
     poll_interval_seconds: int = 180
+    live_poll_seconds: int = 15      # how often to look for just-posted projects
+    lookback_minutes: int = 60       # on start-up, how far back to look
+    background_drafts: bool = False  # server mode: show the card at once, AI polishes the proposal after
     score_threshold: int = 70
     auto_submit: bool = False
     auto_submit_min_score: int = 85
@@ -72,15 +90,15 @@ class Settings:
         e = os.environ.get
         channels = [c.strip() for c in e("NOTIFY_CHANNELS", "web,console").split(",") if c.strip()]
         return cls(
-            freelancer_token=e("FREELANCER_OAUTH_TOKEN", ""),
+            freelancer_token=clean_secret(e("FREELANCER_OAUTH_TOKEN", "")),
             freelancer_api_url=e("FREELANCER_API_URL", cls.freelancer_api_url).rstrip("/"),
             freelancer_site_url=e("FREELANCER_SITE_URL", cls.freelancer_site_url).rstrip("/"),
             llm_provider=e("LLM_PROVIDER", "none").lower(),
-            llm_api_key=e("LLM_API_KEY", ""),
+            llm_api_key=clean_secret(e("LLM_API_KEY", "")),
             llm_model=e("LLM_MODEL", ""),
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_score_enabled=_bool(e("LLM_SCORE_ENABLED"), False),
-            whatsapp_token=e("WHATSAPP_TOKEN", ""),
+            whatsapp_token=clean_secret(e("WHATSAPP_TOKEN", "")),
             whatsapp_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
             whatsapp_verify_token=e("WHATSAPP_VERIFY_TOKEN", ""),
             whatsapp_app_secret=e("WHATSAPP_APP_SECRET", ""),
@@ -93,6 +111,8 @@ class Settings:
             public_base_url=e("PUBLIC_BASE_URL", "").rstrip("/"),
             notify_channels=channels,
             poll_interval_seconds=_int(e("POLL_INTERVAL_SECONDS"), 180),
+            live_poll_seconds=max(10, _int(e("LIVE_POLL_SECONDS"), 15)),
+            lookback_minutes=_int(e("LOOKBACK_MINUTES"), 60),
             score_threshold=_int(e("SCORE_THRESHOLD"), 70),
             auto_submit=_bool(e("AUTO_SUBMIT"), False),
             auto_submit_min_score=_int(e("AUTO_SUBMIT_MIN_SCORE"), 85),

@@ -25,7 +25,8 @@ skills:
             Automation]
   secondary: [CrewAI, LlamaIndex, FAISS, Pinecone, pgvector, Whisper, Prophet, scikit-learn, PyTorch,
               TensorFlow, Docker, MongoDB, PostgreSQL, React.js, Next.js, TypeScript, Azure, AWS,
-              Streamlit, REST API, Machine Learning, Data Extraction, n8n]
+              Streamlit, REST API, Machine Learning, Data Extraction, n8n, NLP,
+              Node.js, Data Science, Prompt Engineering]
 
 facts:
   - "BS Software Engineering, Iqra University (2021-2025)."
@@ -128,14 +129,14 @@ search:
   job_ids: []               # optional Freelancer skill IDs to narrow search
   project_types: [fixed, hourly]
   min_budget_usd: 30
-  max_bid_count: 40          # skip crowded projects — saves bids
-  max_age_hours: 12          # fresh projects only; early bids win more
+  max_bid_count: 50          # cards disappear automatically once a project passes 50 bids
+  max_age_hours: 6           # only freshly posted projects; early bids win
   require_payment_verified: false   # true once you have reviews; false helps find first jobs
   min_client_rating: 0              # 0 = allow new clients
   blocked_countries: []
   allowed_currencies: []            # empty = all
-  exclude_keywords: ["wordpress theme", "logo design", "data entry only", "homework", "assignment",
-                     "exam", "thesis writing", "adult", "casino", "crypto pump"]
+  exclude_keywords: ["wordpress theme", "logo design", "data entry only", "homework", "exam",
+                     "thesis writing", "adult content", "casino", "crypto pump"]   # whole words only
   skip_nda: true            # never auto-accept NDAs; review manually
 
 style:

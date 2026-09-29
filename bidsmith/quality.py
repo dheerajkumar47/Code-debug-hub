@@ -64,8 +64,10 @@ def check(text: str, p: Project, profile_corpus: str, style: dict,
 
     if len(text) > max_chars:
         issues.append(f"{len(text)} chars > {max_chars} limit")
-    if words < min_w:
-        issues.append(f"too short ({words} words < {min_w})")
+    if words < min_w - 25:
+        issues.append(f"too short ({words} words)")
+    elif words < min_w:
+        warnings.append(f"a bit short ({words} words)")
     elif words > max_w + 40:
         issues.append(f"too long ({words} words > {max_w})")
     elif words > max_w:

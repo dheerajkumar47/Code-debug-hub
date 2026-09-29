@@ -6,7 +6,7 @@ command -v python3 >/dev/null || { echo "Install Python 3.11+ first: https://www
 [ -d .venv ] || python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -q --disable-pip-version-check -r requirements.txt
-if [ ! -f .env ]; then
+if [ ! -f .env ] || [ -f keys.txt ]; then
   echo; echo "=== First-time setup: paste your 2 keys ==="
   python -m bidsmith setup
 fi

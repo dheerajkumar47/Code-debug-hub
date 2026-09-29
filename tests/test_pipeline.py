@@ -71,3 +71,88 @@ def test_auto_submit_is_opt_in_and_capped(make_bot, projects):
     bot = make_bot(auto_submit=True, auto_submit_min_score=1, max_bids_per_day=0)
     bot.process([p], NOW)
     assert bot.client.bids == []  # cap of 0 blocks it
+
+
+def test_ai_forgetting_client_instruction_is_fixed_automatically(make_bot, projects):
+    forgot = ("You need a WhatsApp assistant for clinic FAQs and bookings into Google Calendar in English and Urdu. "
+              "I built an AI Receptionist on WhatsApp with booking and voice replies. Plan: 1) map FAQs, "
+              "2) connect WhatsApp Business API and Google Calendar, 3) test bookings, 4) deploy. "
+              "Which calendar holds staff availability? — Dheeraj")
+    bot = make_bot(llm=FakeLLM([forgot]))
+    bot.process([projects[40100002]], NOW)
+    assert bot.store.get_draft(40100002)["text"].lower().startswith("banana")
+
+
+def test_hidden_projects_threshold_recheck_and_draft_anyway(make_bot, projects):
+    bot = make_bot()
+    bot.process(list(projects.values()), NOW)
+    reasons, weak, soft = bot.hidden_summary()
+    assert any("logo design" in k for k, _ in reasons) and weak
+    weak_id = weak[0]["id"]
+    assert bot.draft_anyway(weak_id).startswith("✍")
+    assert bot.store.get_project(weak_id)["status"] == "pending" and bot.store.get_draft(weak_id)
+    # raising the bar hides nothing already pending, lowering it + recheck surfaces weak ones
+    assert "95" in bot.set_threshold(200)
+    bot.set_threshold(30)
+    assert bot.threshold() == 30
+    bot.recheck_hidden()
+    assert all(r["status"] != "low_score" for r in bot.store.list_projects(("low_score",), 50))
+
+
+def test_crowded_but_great_fit_is_shown_not_lost(make_bot, projects):
+    import dataclasses
+    crowded = dataclasses.replace(projects[40100001], id=555, bid_count=95)
+    bot = make_bot()
+    bot.process([crowded], NOW)
+    row = bot.store.get_project(555)
+    assert row["status"] == "filtered" and row["score"] >= 70
+    _, _, soft = bot.hidden_summary(now=NOW)
+    assert [r["id"] for r in soft] == [555]
+    old = dataclasses.replace(crowded, id=556, time_submitted=int(NOW - 7 * 86400))
+    bot.process([old], NOW)
+    assert 556 not in [r["id"] for r in bot.hidden_summary(now=NOW)[2]]  # a week old: not worth a bid
+    assert bot.draft_anyway(555).startswith("✍")
+
+
+def test_live_cycle_finds_new_and_removes_cards_past_50_bids(make_bot, projects):
+    import dataclasses, time as _t
+    fresh = [dataclasses.replace(projects[i], time_submitted=int(_t.time()) - 120) for i in (40100001, 40100004)]
+    bot = make_bot()
+    bot.client.projects = fresh
+    live = {40100001: {"bid_count": 9, "open": True}, 40100004: {"bid_count": 12, "open": True}}
+    bot.client.refresh = lambda ids: {i: live[i] for i in ids if i in live}
+    st = bot.run_live()
+    assert st["pending"] == 2 and st["expired"] == 0 and bot.store.kv_get("last_poll")
+    live[40100004] = {"bid_count": 51, "open": True}      # crossed 50 → disappears
+    live[40100001] = {"bid_count": 14, "open": True}
+    st = bot.run_live()
+    assert st["expired"] == 1
+    ids = [c["id"] for c in bot.live_state()["cards"]]
+    assert ids == [40100001]
+    assert bot.live_state()["cards"][0]["bids"] == 14     # bid count kept up to date
+    live[40100001] = {"bid_count": 14, "open": False}     # client closed it → disappears
+    bot.run_live()
+    assert bot.live_state()["cards"] == []
+
+
+def test_background_draft_shows_card_instantly_then_polishes(make_bot, projects):
+    import threading
+    gate = threading.Event()
+
+    class SlowLLM(FakeLLM):
+        def complete(self, *a, **k):
+            gate.wait(5)
+            return super().complete(*a, **k)
+
+    good = ("You need a RAG chatbot over ~800 internal PDFs that cites sources. I built a RAG Chatbot with a "
+            "LangGraph router (Pinecone + FastAPI): https://github.com/dheerajkumar47/IntelliCourse\n"
+            "Plan: 1) ingest PDFs, 2) retrieval with citations, 3) FastAPI + React widget, 4) Docker deploy. "
+            "Which vector database do you prefer? — Dheeraj")
+    bot = make_bot(llm=SlowLLM([good]), background_drafts=True)
+    bot.process([projects[40100001]], NOW)
+    card = bot.live_state()["cards"][0]
+    assert card["drafting"] and card["text"]          # ready draft already there
+    gate.set()
+    bot._drafter.shutdown(wait=True)
+    card = bot.live_state()["cards"][0]
+    assert not card["drafting"] and card["text"] == good

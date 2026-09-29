@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import logging
+import re
+import time
 
 import httpx
 
 log = logging.getLogger(__name__)
 
 DEFAULT_MODELS = {
-    "gemini": "gemini-2.5-flash",
+    "gemini": "gemini-flash-latest",  # auto-switches to a live model if Google retires a name
     "openai": "gpt-4.1-mini",
     "anthropic": "claude-sonnet-5-5",
 }
@@ -26,6 +28,7 @@ class LLM:
         self.model = model or DEFAULT_MODELS.get(self.provider, "")
         self.base_url = base_url.rstrip("/")
         self._http = httpx.Client(timeout=timeout, transport=transport)
+        self._sleep = time.sleep
 
     @property
     def enabled(self) -> bool:
@@ -39,24 +42,72 @@ class LLM:
 
     # ------------------------------------------------------------------
     def _post(self, url: str, headers: dict, body: dict) -> dict:
-        r = self._http.post(url, headers=headers, json=body)
+        for wait in (2, 6, 0):  # retry briefly when the provider is busy
+            r = self._http.post(url, headers=headers, json=body)
+            if r.status_code in (429, 500, 502, 503, 504) and wait:
+                log.info("%s busy (HTTP %s), retrying in %ss", self.provider, r.status_code, wait)
+                self._sleep(wait)
+                continue
+            break
         if r.status_code >= 400:
-            raise LLMError(f"{self.provider} HTTP {r.status_code}: {r.text[:300]}")
+            raise LLMError(f"{self.provider} HTTP {r.status_code}: {r.text[:600]}")
         return r.json()
 
+    def _gemini_base(self) -> str:
+        return self.base_url or "https://generativelanguage.googleapis.com/v1beta"
+
+    def _gemini_pick_model(self, error_text: str = "", exclude: str = "") -> str | None:
+        """Find a working model: the one Google's error suggests, else the newest stable Flash model."""
+        m = re.search(r"use (?:models/)?(gemini-[\w.\-]+)", error_text)
+        if m:
+            return m.group(1).rstrip(".")
+        r = self._http.get(f"{self._gemini_base()}/models", params={"pageSize": 200},
+                           headers={"x-goog-api-key": self.api_key})
+        if r.status_code >= 400:
+            return None
+        names = []
+        for mdl in r.json().get("models", []):
+            name = mdl.get("name", "").split("/")[-1]
+            if "generateContent" not in mdl.get("supportedGenerationMethods", []):
+                continue
+            if "flash" not in name or name == exclude or \
+                    any(x in name for x in ("image", "tts", "live", "audio", "exp", "embedding")):
+                continue
+            names.append(name)
+
+        def rank(n: str):
+            ver = [int(x) for x in re.findall(r"\d+", n.split("-flash")[0])] or [0]
+            return ("preview" not in n, "lite" not in n, ver, "latest" in n)
+        return max(names, key=rank) if names else None
+
     def _gemini(self, system, user, max_tokens, temperature):
-        base = self.base_url or "https://generativelanguage.googleapis.com/v1beta"
-        data = self._post(
-            f"{base}/models/{self.model}:generateContent",
-            {"x-goog-api-key": self.api_key},
-            {"systemInstruction": {"parts": [{"text": system}]},
-             "contents": [{"role": "user", "parts": [{"text": user}]}],
-             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature}},
-        )
-        try:
-            return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
-        except (KeyError, IndexError) as e:
-            raise LLMError(f"gemini: unexpected response {str(data)[:200]}") from e
+        body = {"systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user}]}],
+                # newer Gemini models "think" first; leave room so the answer isn't cut off
+                "generationConfig": {"maxOutputTokens": max_tokens + 2048, "temperature": temperature}}
+        headers = {"x-goog-api-key": self.api_key}
+        url = lambda: f"{self._gemini_base()}/models/{self.model}:generateContent"  # noqa: E731
+        for attempt in range(3):  # current model → model Google suggests → newest listed Flash model
+            try:
+                data = self._post(url(), headers, body)
+                break
+            except LLMError as e:
+                retired, busy = " 404" in str(e), any(c in str(e) for c in (" 503", " 429", " 500"))
+                if not (retired or busy) or attempt == 2:
+                    raise
+                new = self._gemini_pick_model(str(e) if retired else "", exclude=self.model)
+                if not new or new == self.model:
+                    new = self._gemini_pick_model("", exclude=self.model)
+                if not new or new == self.model:
+                    raise
+                log.warning("Gemini model %s %s, switching to %s", self.model,
+                            "unavailable" if retired else "busy", new)
+                self.model = new
+        parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        if not text:
+            raise LLMError(f"gemini: empty response {str(data)[:200]}")
+        return text
 
     def _openai(self, system, user, max_tokens, temperature):
         base = self.base_url or "https://api.openai.com/v1"

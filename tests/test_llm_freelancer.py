@@ -49,10 +49,112 @@ def test_freelancer_client_search_and_bid():
     ps = c.search_active("rag", job_ids=[13], project_types=["fixed"])
     assert ps[0].url == "https://www.freelancer.com/projects/python/rag-bot"
     assert ps[0].client.payment_verified and ps[0].skills == ["Python"]
-    assert calls[0].headers["Freelancer-OAuth-V1"] == "TOKEN"
+    assert "Freelancer-OAuth-V1" not in calls[0].headers  # search is public, no token sent
     assert ("jobs[]", "13") in calls[0].url.params.multi_items()
 
     assert c.place_bid(1, 250, 7, "text")["id"] == 999
+    assert calls[-1].headers["Freelancer-OAuth-V1"] == "TOKEN"
     body = json.loads(calls[-1].content)
     assert body == {"project_id": 1, "bidder_id": 42, "amount": 250.0, "period": 7,
                     "milestone_percentage": 50, "description": "text"}
+
+
+def test_gemini_switches_when_model_retired():
+    """Reproduces the real error: default model 404s and Google suggests a replacement."""
+    urls = []
+
+    def handler(req: httpx.Request):
+        urls.append(req.url.path)
+        if "gemini-flash-latest" in req.url.path or "gemini-2.5-flash" in req.url.path:
+            return httpx.Response(404, json={"error": {"code": 404, "message":
+                "This model models/gemini-2.5-flash is no longer available to new users. Please update your "
+                "code to use models/gemini-3.8-flash for the latest features and improvements."}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [
+            {"text": "thinking...", "thought": True}, {"text": "OK"}]}}]})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    assert llm.complete("s", "u") == "OK"          # thought parts are dropped
+    assert llm.model == "gemini-3.8-flash"
+    assert urls[-1].endswith("gemini-3.8-flash:generateContent")
+
+
+def test_gemini_discovers_model_from_list():
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": [
+                {"name": "models/gemini-3.1-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-4.0-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/text-embedding-9", "supportedGenerationMethods": ["embedContent"]}]})
+        if "gemini-3.8-flash:" in req.url.path:
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
+        return httpx.Response(404, json={"error": {"message": "not found"}})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    assert llm.complete("s", "u") == "OK" and llm.model == "gemini-3.8-flash"
+
+
+def test_gemini_busy_retries_then_switches_model():
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req.url.path)
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": [
+                {"name": "models/gemini-flash-latest", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash-lite", "supportedGenerationMethods": ["generateContent"]}]})
+        if "flash-latest" in req.url.path:
+            return httpx.Response(503, json={"error": {"code": 503, "message": "high demand"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    llm._sleep = lambda s: None
+    assert llm.complete("s", "u") == "OK"
+    assert llm.model == "gemini-3.8-flash-lite"
+    assert sum("flash-latest:" in c for c in calls) == 3  # retried before switching
+
+
+def _auth_handler(accept: str | None):
+    """Server that accepts the token only in the given header ('oauth', 'bearer' or None)."""
+    def handler(req: httpx.Request):
+        ok = (accept == "oauth" and req.headers.get("Freelancer-OAuth-V1") == "TOK") or \
+             (accept == "bearer" and req.headers.get("Authorization") == "Bearer TOK")
+        if req.url.path.endswith("/projects/active/"):
+            return httpx.Response(200, json={"status": "success", "result": {"projects": [], "users": {}}})
+        if not ok:
+            return httpx.Response(401, json={"status": "error", "error_code": "NOT_AUTHENTICATED",
+                                             "message": "You must be logged in"})
+        if req.url.path.endswith("/self/"):
+            return httpx.Response(200, json={"status": "success", "result": {"id": 7}})
+        return httpx.Response(200, json={"status": "success", "result": {"id": 1}})
+    return handler
+
+
+def test_token_accepted_via_bearer_header():
+    c = FreelancerClient("TOK", transport=httpx.MockTransport(_auth_handler("bearer")))
+    assert c.can_bid() and c.self_id() == 7
+    assert c.place_bid(1, 100, 3, "x")["id"] == 1
+
+
+def test_rejected_token_means_copy_paste_mode_not_crash():
+    c = FreelancerClient("TOK", transport=httpx.MockTransport(_auth_handler(None)))
+    assert c.search_active("python") == []      # search still works
+    assert c.can_bid() is False and "logged in" in c.auth_error
+    assert FreelancerClient(None, transport=httpx.MockTransport(_auth_handler(None))).can_bid() is False
+
+
+def test_search_asks_for_fresh_projects_and_falls_back_if_rejected():
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(dict(req.url.params))
+        if "from_time" in req.url.params:
+            return httpx.Response(400, json={"status": "error", "message": "bad param"})
+        return httpx.Response(200, json={"status": "success", "result": {"projects": [], "users": {}}})
+
+    c = FreelancerClient(None, transport=httpx.MockTransport(handler))
+    assert c.search_active("rag", from_time=123) == []
+    assert seen[0]["from_time"] == "123" and "from_time" not in seen[1]
+    c.search_active("rag", from_time=123)
+    assert "from_time" not in seen[2]          # remembered: no repeated failing calls

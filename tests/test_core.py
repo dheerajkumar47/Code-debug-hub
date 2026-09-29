@@ -65,3 +65,28 @@ def test_quality_gate(profile, projects):
             "Timeline: 7 days. Which calendar holds staff availability today? — Dheeraj")
     rep = quality.check(good, p, profile.corpus, profile.style, (7,))
     assert rep.passed, rep.issues
+
+
+def _real_style_project(**kw):
+    from bidsmith.models import Client, Project
+    base = dict(id=77, title="AI chatbot for customer support using ChatGPT",
+                description="For example, it should answer FAQs from our docs and hand over to a human. "
+                            "Python backend preferred.",
+                url="u", type="fixed", budget_min=250, budget_max=750, bid_count=12, bid_avg=400,
+                skills=["Artificial Intelligence", "Machine Learning (ML)", "ChatGPT", "Python", "Chatbot"],
+                time_submitted=int(NOW - 900), client=Client(payment_verified=True))
+    base.update(kw)
+    return Project(**base)
+
+
+def test_exam_does_not_block_example(profile):
+    ok, why = rule_filter(_real_style_project(), profile, NOW)
+    assert ok, why
+    ok, why = rule_filter(_real_style_project(description="Help with my exam questions"), profile, NOW)
+    assert not ok
+
+
+def test_freelancer_skill_names_match_profile(profile):
+    r = heuristic_score(_real_style_project(), profile, PortfolioIndex(profile.portfolio), NOW)
+    assert "5/5" in r.reasons[0], r.reasons
+    assert r.score >= 75, r

@@ -8,45 +8,60 @@ import sys
 import time
 
 from .app import BidSmith
-from .config import Settings
+from .config import Settings, mask
 from .freelancer import parse_project
 
 
 def run_check(s: Settings) -> int:
-    """Live checks with plain ✅ / ❌ lines, so problems are obvious."""
-    ok = True
-
-    def line(good: bool, text: str):
-        nonlocal ok
-        ok = ok and good
-        print(("✅ " if good else "❌ ") + text)
-
+    """Only a broken project search blocks start-up. Everything else degrades gracefully with a clear note."""
     bot = BidSmith.from_settings(s)
-    if not bot.client:
-        line(False, "Freelancer token missing → run: python -m bidsmith setup")
+
+    # 1) Project search (public API) — the only hard requirement.
+    try:
+        found = bot.client.search_active("python", limit=3)
+        print(f"✅ Freelancer project search works ({len(found)} live projects returned)")
+    except Exception as e:
+        print(f"❌ Cannot reach Freelancer: {e}\n   Check your internet connection, then run start.bat again.")
+        return 1
+
+    # 2) Bidding with the token.
+    if not s.freelancer_token:
+        print("🟡 No Freelancer token → COPY & PASTE mode (the bot finds, scores and writes; you paste the bid).")
+    elif bot.can_bid():
+        print(f"✅ Freelancer token accepted → AUTO-BID mode (user id {bot.client.self_id()})")
     else:
-        try:
-            line(True, f"Freelancer token works (your user id {bot.client.self_id()})")
-            found = bot.client.search_active("chatbot", limit=3)
-            line(True, f"Project search works ({len(found)} live 'chatbot' projects returned)")
-        except Exception as e:
-            line(False, f"Freelancer API error: {e}")
+        print(f"🟡 Freelancer did not accept the token for bidding → COPY & PASTE mode.\n"
+              f"   ({bot.client.auth_error[:160]}; token {mask(s.freelancer_token)})\n"
+              f"   Everything else works. To retry later: new token in keys.txt, then start.bat.")
+
+    # 3) AI writer.
     if bot.llm and bot.llm.enabled:
         try:
-            reply = bot.llm.complete("Reply with one word.", "Say OK", max_tokens=20)
-            line(True, f"AI writer works ({s.llm_provider}: {reply[:20]!r})")
+            bot.llm.complete("Reply with one word.", "Say OK", max_tokens=50)
+            bot.remember_model()
+            print(f"✅ AI writer works ({s.llm_provider} · model {bot.llm.model})")
         except Exception as e:
-            line(False, f"AI key error ({s.llm_provider}): {e}")
+            err = str(e)
+            if any(c in err for c in (" 503", " 429", "high demand", "UNAVAILABLE", "RESOURCE_EXHAUSTED")):
+                print(f"🟡 AI key accepted but {s.llm_provider} is busy right now — the bot retries automatically.")
+            else:
+                print(f"🟡 AI writer not working ({err[:160]}; key {mask(s.llm_api_key)})\n"
+                      f"   Drafts use the built-in template until it works. Fix: new key in keys.txt, then start.bat.")
     else:
-        print("⚠️  No AI key → drafts use the simple template (works, but add a free Gemini key for best bids)")
-    if "whatsapp" in s.notify_channels:
-        good = bool(s.whatsapp_token and s.whatsapp_phone_number_id and s.owner_whatsapp)
-        line(good, "WhatsApp settings present" if good else "WhatsApp enabled but settings missing")
-    else:
-        print("ℹ️  WhatsApp off → approve bids on the dashboard (add WhatsApp later with: python -m bidsmith setup)")
-    line(bool(s.dashboard_password), "Dashboard password set" if s.dashboard_password else "DASHBOARD_PASSWORD missing")
-    print("\nReady! Start with: python -m bidsmith serve" if ok else "\nFix the ❌ lines, then run check again.")
-    return 0 if ok else 1
+        print("🟡 No AI key → drafts use the built-in template.")
+
+    # 4) Dashboard login.
+    if not s.dashboard_password:
+        import secrets as _secrets
+        from .setup_wizard import _read_env, _set
+        from pathlib import Path
+        s.dashboard_password = _secrets.token_urlsafe(12)
+        env = Path(".env")
+        env.write_text("\n".join(_set(_read_env(env), "DASHBOARD_PASSWORD", s.dashboard_password)) + "\n",
+                       encoding="utf-8")
+        print(f"✅ Dashboard password created: {s.dashboard_password}")
+    print("\nStarting…")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import socket
+    s.background_drafts = True  # cards appear instantly; the AI polishes the proposal seconds later
 
     import uvicorn
     from .web import create_app

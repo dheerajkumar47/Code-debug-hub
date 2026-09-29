@@ -70,6 +70,14 @@ class Store:
         self._x("UPDATE projects SET status=?, note=?, updated_at=? WHERE id=?",
                 (status, note, time.time(), project_id))
 
+    def update_bid_count(self, project_id: int, bid_count: int) -> None:
+        row = self.get_project(project_id)
+        if not row:
+            return
+        d = json.loads(row["data"] or "{}")
+        d["bid_count"] = bid_count
+        self._x("UPDATE projects SET data=? WHERE id=?", (json.dumps(d), project_id))
+
     def get_project(self, project_id: int) -> dict[str, Any] | None:
         row = self._x("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
         return dict(row) if row else None
