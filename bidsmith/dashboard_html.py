@@ -61,17 +61,36 @@ textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .applied{margin-top:28px}.applied h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 8px}
 .applied a{color:var(--ink);text-decoration:none}.applied li{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;list-style:none}
 .applied ul{padding:0;margin:0}
+.pill.link{cursor:pointer}.pill.link:hover{border-color:var(--acc);color:var(--ink)}
+.tabs{display:flex;gap:6px;margin:-4px 0 16px;border-bottom:1px solid var(--line)}
+.tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:8px 12px;color:var(--mut)}
+.tab.on{color:var(--ink);border-bottom-color:var(--acc)}
+.filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filters button{padding:6px 12px;font-size:13px}.filters button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.rows{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}.row a{color:var(--ink);text-decoration:none;font-weight:600}.row a:hover{color:var(--acc)}
+.row .sub{font-size:12.5px;color:var(--mut);margin-top:2px}
+.verdict{font-size:12.5px;white-space:nowrap;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--mut);border:1px solid var(--line)}
+.verdict.ok{background:rgba(5,150,105,.12);color:var(--ok);border-color:transparent;font-weight:600}
+@media(max-width:600px){.row{flex-direction:column}.verdict{white-space:normal}}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);
 padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;max-width:calc(100% - 32px);z-index:9}
 .toast.show{opacity:1;transform:translateX(-50%)}
 </style></head><body><div class="wrap">
 <header><div class="brand">Bid<span>Smith</span></div>
 <div class="bar"><span class="pill"><span id="dot" class="dot"></span><span id="status">Connecting…</span></span>
-<span class="pill">Checked today <b id="checked">0</b></span>
-<span class="pill">Matched today <b id="matched">0</b></span>
+<span class="pill link" id="pChecked" title="See every job checked today">Checked today <b id="checked">0</b></span>
+<span class="pill link" id="pMatched" title="See today's matches">Matched today <b id="matched">0</b></span>
 <span class="pill">Open now <b id="open">0</b></span>
 <span class="pill">Applied <b id="applied">0</b></span>
 <button id="pause" class="ghost" title="Pause or resume searching">Pause</button></div></header>
+<div class="tabs"><button class="tab on" data-tab="live">Live</button><button class="tab" data-tab="checked">Checked today</button></div>
+<div id="checkedView" style="display:none">
+<div class="filters"><button data-f="all" class="on">All</button><button data-f="matched">Matched</button><button data-f="not_matched">Not matched</button>
+<span id="ckSummary" style="align-self:center;color:var(--mut);font-size:13px;margin-left:6px"></span></div>
+<div class="rows" id="ckRows"></div></div>
+<div id="liveView">
 <div id="notice"></div>
 <div id="cards"></div>
 <div id="empty" class="empty" style="display:none"><div class="radar"></div>
@@ -79,6 +98,7 @@ padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;ma
 <div>New matches appear here automatically, within seconds. Keep this page open.</div>
 <div id="counts" style="margin-top:14px;font-size:13px"></div></div>
 <div class="applied" id="appliedBox" style="display:none"><h3>Today's matches that are no longer open</h3><ul id="appliedList"></ul></div>
+</div>
 </div><div id="toast" class="toast"></div>
 <script>
 const $=s=>document.querySelector(s), esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -155,5 +175,20 @@ function render(st){autoBid=st.auto_bid;live=st.live;$("#applied").textContent=s
 async function tick(){try{render(await api("/api/state"))}catch(e){$("#status").textContent="Reconnecting…";$("#dot").className="dot off"}}
 $("#pause").onclick=async()=>{const r=await api("/api/pause",{});toast(r.message);tick()};
 document.addEventListener("click",()=>{if("Notification"in window&&Notification.permission=="default")Notification.requestPermission()},{once:true});
-tick();setInterval(tick,3000);
+let tab="live",filt="all",ckTimer=null;
+function showTab(t,f){tab=t;if(f)filt=f;history.replaceState(null,"",t=="checked"?"#checked":location.pathname);document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab==t));
+ $("#liveView").style.display=t=="live"?"":"none";$("#checkedView").style.display=t=="checked"?"":"none";
+ document.querySelectorAll(".filters button").forEach(b=>b.classList.toggle("on",b.dataset.f==filt));
+ clearInterval(ckTimer);if(t=="checked"){loadChecked();ckTimer=setInterval(loadChecked,10000)}window.scrollTo(0,0)}
+async function loadChecked(){try{const d=await api("/api/checked");
+ const rows=d.rows.filter(r=>filt=="all"||r.group==filt);
+ $("#ckSummary").textContent=`${d.total} checked today · ${d.matched} matched`;
+ $("#ckRows").innerHTML=rows.length?rows.map(r=>`<div class="row"><div><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>
+  <div class="sub">${esc(money(r))} · ${r.bids} bids${r.posted_s!=null?" · posted "+ago(r.posted_s):""}${r.skills.length?" · "+esc(r.skills.join(", ")):""}</div></div>
+  <span class="verdict ${r.group=="matched"?"ok":""}">${esc(r.why)}</span></div>`).join("")
+  :`<div class="row" style="color:var(--mut)">Nothing here yet today.</div>`}catch(e){toast("Could not load the list: "+e.message)}}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+document.querySelectorAll(".filters button").forEach(b=>b.onclick=()=>showTab("checked",b.dataset.f));
+$("#pChecked").onclick=()=>showTab("checked","all");$("#pMatched").onclick=()=>showTab("checked","matched");
+tick();setInterval(tick,3000);if(location.hash=="#checked")showTab("checked","all");
 </script></body></html>"""

@@ -108,6 +108,10 @@ def create_app(bot: BidSmith, run_loop: bool = True) -> FastAPI:
     def dashboard():
         return HTMLResponse(PAGE)
 
+    @app.get("/api/checked", dependencies=[Depends(auth)])
+    async def checked():
+        return await asyncio.to_thread(bot.checked_today)
+
     @app.get("/api/state", dependencies=[Depends(auth)])
     async def state():
         return await asyncio.to_thread(bot.live_state)

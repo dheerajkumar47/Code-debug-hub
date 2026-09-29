@@ -86,6 +86,10 @@ class Store:
         q = f"SELECT * FROM projects WHERE status IN ({','.join('?' * len(statuses))}) ORDER BY updated_at DESC LIMIT ?"
         return [dict(r) for r in self._x(q, (*statuses, limit)).fetchall()]
 
+    def seen_since(self, ts: float, limit: int = 500) -> list[dict]:
+        q = "SELECT * FROM projects WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?"
+        return [dict(r) for r in self._x(q, (ts, limit)).fetchall()]
+
     def project_obj(self, project_id: int) -> Project | None:
         from .models import Client
         row = self.get_project(project_id)

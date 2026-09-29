@@ -115,3 +115,21 @@ def test_live_api_apply_with_edits_and_skip(make_bot, projects):
     assert c.post("/api/cards/40100004/skip", auth=auth).json()["ok"]
     assert c.get("/api/state", auth=auth).json()["cards"] == []
     assert c.post("/api/pause", auth=auth).json()["message"].startswith("⏸")
+
+
+def test_checked_today_tab_lists_every_job_with_a_verdict(make_bot, projects):
+    import dataclasses, time as _t
+    bot = make_bot(dashboard_password="pw")
+    fresh = [dataclasses.replace(p, time_submitted=int(_t.time()) - 300) for p in projects.values()]
+    bot.process(fresh)
+    bot.skip(40100004)
+    c = TestClient(create_app(bot, run_loop=False))
+    d = c.get("/api/checked", auth=("owner", "pw")).json()
+    assert d["total"] == 6
+    why = {r["title"][:12]: (r["group"], r["why"]) for r in d["rows"]}
+    assert why["RAG chatbot "] == ("matched", "✅ Matched · open on your Live tab")
+    assert why["YOLO people "] == ("matched", "Matched · you skipped")
+    assert why["Logo design "][0] == "not_matched" and "Excluded: logo design" in why["Logo design "][1]
+    assert why["Build Uber c"][0] == "not_matched"
+    assert why["Confidential"] == ("not_matched", "NDA project")
+    assert "Checked today" in c.get("/", auth=("owner", "pw")).text

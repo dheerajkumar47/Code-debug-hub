@@ -388,6 +388,65 @@ class BidSmith:
         out.sort(key=lambda x: x["at"] or 0, reverse=True)
         return out[:limit]
 
+    @staticmethod
+    def _verdict(r: dict) -> tuple[str, str]:
+        """(group, reason) for one checked project. group: matched | not_matched."""
+        status, note = r["status"], (r.get("note") or "")
+        reasons = " ".join(json.loads(r.get("reasons") or "[]")).lower()
+        if status == "pending":
+            return "matched", "✅ Matched · open on your Live tab"
+        if status in ("bid_placed", "auto_bid"):
+            return "matched", "Applied ✓"
+        if status == "skipped":
+            return "matched", "Matched · you skipped"
+        if status == "bid_failed":
+            return "matched", "Matched · bid failed"
+        if status == "expired":
+            low = note.lower()
+            label = next((lbl for key, lbl in BidSmith.GONE_REASONS if key in low), "No longer open")
+            return ("not_matched", label) if "not an ai" in low else ("matched", f"Matched · {label.lower()}")
+        if status == "low_score":
+            return "not_matched", ("Not an AI project" if "no core ai skill" in reasons
+                                   else "Weak match for your skills")
+        parts = []
+        for part in note.split("; "):
+            p = part.strip()
+            if not p:
+                continue
+            if " bids > " in p:
+                parts.append(f"Too many bids ({p.split(' ')[0]})")
+            elif p.startswith("too old"):
+                parts.append("Too old" + (f" {p[7:].strip()}" if len(p) > 7 else ""))
+            elif p.startswith("budget $"):
+                parts.append(f"Budget too small ({p.split(' <')[0].replace('budget ', '')})")
+            elif p.startswith("hourly max"):
+                parts.append("Hourly rate below your minimum")
+            elif p.startswith("excluded keyword"):
+                parts.append("Excluded: " + p.split("'")[1] if "'" in p else "Excluded keyword")
+            elif p.startswith("NDA"):
+                parts.append("NDA project")
+            else:
+                parts.append(p[0].upper() + p[1:])
+        return "not_matched", " · ".join(parts[:2]) or "Filtered out"
+
+    def checked_today(self, limit: int = 500) -> dict:
+        """Every project the bot looked at today, newest first, with the verdict."""
+        midnight = time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))
+        now = time.time()
+        rows = []
+        for r in self.store.seen_since(midnight, limit):
+            d = json.loads(r["data"] or "{}")
+            group, why = self._verdict(r)
+            rows.append({
+                "id": r["id"], "title": r["title"], "url": r["url"], "group": group, "why": why,
+                "type": d.get("type", "fixed"), "currency": d.get("currency", "USD"),
+                "budget_min": d.get("budget_min", 0), "budget_max": d.get("budget_max", 0),
+                "bids": d.get("bid_count", 0), "skills": d.get("skills", [])[:6],
+                "posted_s": int(now - d["time_submitted"]) if d.get("time_submitted") else None,
+                "seen_s": int(now - (r["created_at"] or now)),
+            })
+        return {"rows": rows, "total": len(rows), "matched": sum(x["group"] == "matched" for x in rows)}
+
     def apply(self, pid: int, text: str | None = None, amount: float | None = None,
               days: int | None = None) -> str:
         """One click: save your edits (if any), then place the bid."""
