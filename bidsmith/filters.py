@@ -1,6 +1,7 @@
 """Stage 1: cheap, deterministic rules. A project must pass all of them."""
 from __future__ import annotations
 
+import re
 import time
 
 from .config import Profile
@@ -47,7 +48,8 @@ def rule_filter(p: Project, profile: Profile, now: float | None = None) -> tuple
 
     text = p.text.lower()
     for kw in s.get("exclude_keywords", []):
-        if kw.lower() in text:
+        # whole words only: "exam" must not match "example"
+        if re.search(rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])", text):
             fails.append(f"excluded keyword '{kw}'")
             break
 

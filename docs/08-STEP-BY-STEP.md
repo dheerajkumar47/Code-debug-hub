@@ -123,6 +123,7 @@ The first cards appear within a few minutes, once good projects are found.
    - paste the proposal on Freelancer yourself and click Place Bid there.
 
 ## PART 8: Next day and later
+- **To get the newest version:** close the black window, then double-click **`update.bat`**. It keeps your keys and history, then starts the bot.
 - **To start:** double-click **`start.bat`**. It won't ask for the keys again.
 - **To stop:** close the black window.
 - **To change or add a key:** make a new `keys.txt` (Part 5A) and double-click `start.bat`.

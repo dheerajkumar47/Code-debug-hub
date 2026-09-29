@@ -116,10 +116,10 @@ class BidSmith:
             time.sleep(random.uniform(0.8, 2.0))  # polite pacing
         return list(found.values())
 
-    def process(self, projects: list[Project], now: float | None = None) -> dict:
+    def process(self, projects: list[Project], now: float | None = None, recheck: bool = False) -> dict:
         stats = {"new": 0, "filtered": 0, "low_score": 0, "pending": 0, "auto_bid": 0}
         for p in projects:
-            if self.store.seen(p.id):
+            if not recheck and self.store.seen(p.id):
                 continue
             stats["new"] += 1
             ok, why = rule_filter(p, self.profile, now)
@@ -129,9 +129,9 @@ class BidSmith:
                 continue
             score = heuristic_score(p, self.profile, self.index, now)
             if self.s.llm_score_enabled and self.llm and self.llm.enabled and \
-                    score.score >= self.s.score_threshold - 15:
+                    score.score >= self.threshold() - 15:
                 score = llm_refine(score, p, self.profile, self.llm)
-            if score.score < self.s.score_threshold:
+            if score.score < self.threshold():
                 self.store.save_project(p, "low_score", score)
                 stats["low_score"] += 1
                 continue
@@ -148,6 +148,48 @@ class BidSmith:
             stats["pending"] += 1
             self.push_card(p.id)
         return stats
+
+    def threshold(self) -> int:
+        """Minimum score for a card. Set from the dashboard (saved), else from .env."""
+        v = self.store.kv_get("score_threshold")
+        return int(v) if v and v.isdigit() else self.s.score_threshold
+
+    def set_threshold(self, value: int) -> str:
+        value = max(30, min(95, int(value)))
+        self.store.kv_set("score_threshold", str(value))
+        return f"Minimum score set to {value}. Press ♻ Re-check hidden to apply it to projects already seen."
+
+    def recheck_hidden(self) -> dict:
+        """Run hidden projects (filtered / weak) through the current rules and score again."""
+        rows = self.store.list_projects(("filtered", "low_score"), 500)
+        projects = [p for p in (self.store.project_obj(r["id"]) for r in rows) if p]
+        return self.process(projects, recheck=True)
+
+    def draft_anyway(self, pid: int) -> str:
+        """Owner override: write a bid for a hidden project."""
+        p = self.store.project_obj(pid)
+        if not p:
+            return f"❓ #{pid} not found"
+        score = heuristic_score(p, self.profile, self.index)
+        price = compute_price(p, self.profile, score.score, self.s.milestone_percentage)
+        self.store.save_project(p, "pending", score)
+        self.store.save_draft(proposal.write(p, self.profile, self.index, price, self.llm))
+        return f"✍ Bid written for #{pid} — it is at the top of your list."
+
+    def hidden_summary(self, limit: int = 8) -> tuple[list[tuple[str, int]], list[dict]]:
+        """(top reasons projects were filtered, best weak matches) — so nothing is a black box."""
+        from collections import Counter
+        reasons: Counter = Counter()
+        for r in self.store.list_projects(("filtered",), 1000):
+            for part in (r.get("note") or "").split("; "):
+                if part:
+                    key = part
+                    key = "budget too small" if key.startswith("budget $") else key
+                    key = "too many bids already" if " bids > " in key else key
+                    key = "hourly rate below your floor" if key.startswith("hourly max") else key
+                    reasons[key] += 1
+        weak = sorted(self.store.list_projects(("low_score",), 500), key=lambda r: r["score"] or 0, reverse=True)
+        return reasons.most_common(6), weak[:limit]
 
     def run_once(self) -> dict:
         if self.paused():

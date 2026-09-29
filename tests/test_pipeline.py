@@ -81,3 +81,19 @@ def test_ai_forgetting_client_instruction_is_fixed_automatically(make_bot, proje
     bot = make_bot(llm=FakeLLM([forgot]))
     bot.process([projects[40100002]], NOW)
     assert bot.store.get_draft(40100002)["text"].lower().startswith("banana")
+
+
+def test_hidden_projects_threshold_recheck_and_draft_anyway(make_bot, projects):
+    bot = make_bot()
+    bot.process(list(projects.values()), NOW)
+    reasons, weak = bot.hidden_summary()
+    assert any("logo design" in k for k, _ in reasons) and weak
+    weak_id = weak[0]["id"]
+    assert bot.draft_anyway(weak_id).startswith("✍")
+    assert bot.store.get_project(weak_id)["status"] == "pending" and bot.store.get_draft(weak_id)
+    # raising the bar hides nothing already pending, lowering it + recheck surfaces weak ones
+    assert "95" in bot.set_threshold(200)
+    bot.set_threshold(30)
+    assert bot.threshold() == 30
+    bot.recheck_hidden()
+    assert all(r["status"] != "low_score" for r in bot.store.list_projects(("low_score",), 50))

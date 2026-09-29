@@ -104,6 +104,19 @@ def create_app(bot: BidSmith, run_loop: bool = True) -> FastAPI:
     async def approve(pid: int):
         return _after(await asyncio.to_thread(bot.approve, pid))
 
+    @app.post("/p/{pid}/draft", dependencies=[Depends(auth)])
+    async def draft_anyway(pid: int):
+        return _after(await asyncio.to_thread(bot.draft_anyway, pid))
+
+    @app.post("/recheck", dependencies=[Depends(auth)])
+    async def recheck():
+        st = await asyncio.to_thread(bot.recheck_hidden)
+        return _after(f"Re-checked hidden projects: {st.get('pending', 0)} new cards.")
+
+    @app.post("/threshold", dependencies=[Depends(auth)])
+    def threshold(value: int = Form(...)):
+        return _after(bot.set_threshold(value))
+
     @app.post("/p/{pid}/done", dependencies=[Depends(auth)])
     def done(pid: int):
         return _after(bot.mark_done(pid))
@@ -126,7 +139,10 @@ def create_app(bot: BidSmith, run_loop: bool = True) -> FastAPI:
 
     @app.post("/run", dependencies=[Depends(auth)])
     async def run_now():
-        return _after(f"Run: {await asyncio.to_thread(bot.run_once)}")
+        st = await asyncio.to_thread(bot.run_once)
+        if st.get("paused"):
+            return _after("Paused — press Resume first.")
+        return _after(f"Checked Freelancer: {st['new']} new projects, {st['pending']} good matches added.")
 
     @app.post("/toggle-pause", dependencies=[Depends(auth)])
     def toggle():
@@ -146,7 +162,9 @@ main{width:100%;max-width:760px;margin:auto;padding:16px}h1{font-size:20px;margi
 .t{font-weight:600}.m{color:var(--mut);font-size:13px}.score{float:right;font-weight:700}
 textarea{width:100%;max-width:100%;display:block;min-height:190px;font:inherit;padding:10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg)}
 input{width:96px;max-width:40%;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg)}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}.row form{margin:0}.stats{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.pill{background:var(--card);border:1px solid var(--bd);border-radius:999px;padding:4px 10px;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}.row form{margin:0}.stats{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.cols{display:grid;grid-template-columns:1fr;gap:8px}@media(min-width:760px){.cols{grid-template-columns:1fr 1.4fr}}
+.wl{list-style:none;padding:0}.wk{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bd)}
+.wk button{padding:6px 10px;font-size:13px}.pill{background:var(--card);border:1px solid var(--bd);border-radius:999px;padding:4px 10px;font-size:13px}
 button{border:0;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer;background:var(--bd);color:var(--fg)}
 .go{background:var(--ok);color:#fff}.no{background:var(--bad);color:#fff}.pri{background:var(--acc);color:#fff}
 .warn{color:var(--bad);font-size:13px}.msg{background:var(--acc);color:#fff;padding:8px 12px;border-radius:8px;margin-bottom:12px}
@@ -186,6 +204,18 @@ def render(bot: BidSmith, rows: list[dict], done: list[dict]) -> str:
 <a href="{e(r['url'])}" target=_blank rel=noopener><button type=button>↗ Open</button></a>
 <form method=post action="/p/{pid}/regen"><button class=pri>🔁 Regenerate</button></form>
 <form method=post action="/p/{pid}/skip"><button class=no>⏭ Skip</button></form></div></div>""")
+    reasons, weak = bot.hidden_summary()
+    reason_html = "".join(f"<li><b>{n}</b> × {e(k)}</li>" for k, n in reasons) or "<li>none</li>"
+    weak_html = "".join(
+        f"<li class=wk><span><b>{r['score']}</b> · <a href='{e(r['url'])}' target=_blank rel=noopener>{e(r['title'][:70])}</a></span>"
+        f"<form method=post action='/p/{r['id']}/draft'><button>✍ Write bid</button></form></li>" for r in weak
+    ) or "<li>none</li>"
+    hidden = f"""<div class=card><div class=t>Hidden projects: why</div>
+<div class=m>Projects the bot skipped, so nothing is a black box.</div>
+<div class=cols><div><div class=m><b>Filtered out, top reasons</b></div><ul class=m>{reason_html}</ul></div>
+<div><div class=m><b>Weak matches (best first)</b>, press ✍ to write a bid anyway</div><ul class="m wl">{weak_html}</ul></div></div>
+<div class=row><form method=post action=/threshold>Min score <input name=value type=number min=30 max=95 value="{bot.threshold()}">
+<button>Set</button></form><form method=post action=/recheck><button class=pri>♻ Re-check hidden</button></form></div></div>"""
     hist = "".join(f"<li>{e(r['status'])} · <a href='{e(r['url'])}'>{e(r['title'][:60])}</a></li>" for r in done)
     stats = bot.store.stats()
     labels = [("pending", "waiting for you"), ("bid_placed", "bids placed"), ("skipped", "skipped"),
@@ -204,5 +234,6 @@ else{{t.select();document.execCommand('copy');done();}}}}</script></head><body><
 <form method=post action=/run><button>Run now</button></form>
 <form method=post action=/toggle-pause><button>{'Resume' if bot.paused() else 'Pause'}</button></form></div>
 {''.join(cards) or '<div class=card>No pending drafts. 🎉</div>'}
+{hidden}
 <div class=card><div class=t>Recent</div><ul class=m>{hist or '<li>none</li>'}</ul></div>
 </main></body></html>"""

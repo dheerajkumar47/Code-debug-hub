@@ -16,23 +16,51 @@ RED_FLAGS = [
     (r"\bfree (test|trial|sample)\b|\bunpaid\b|\bwithout pay", "asks for free/unpaid work"),
     (r"(contact|message|add) me (on|via) (whatsapp|telegram|skype|email)|\bmy (whatsapp|telegram)\b",
      "wants off-platform contact"),
-    (r"\b(homework|assignment|exam|quiz answers)\b", "academic work"),
+    (r"\b(homework|exam|quiz answers|thesis)\b", "academic work"),
     (r"\bvery (low|small|tight) budget\b|\bcheap(est)?\b", "price-shopping client"),
     (r"\bclone of (facebook|uber|amazon|airbnb)\b|\blike (uber|facebook|amazon)\b", "huge scope, likely small budget"),
 ]
 
 
+# Freelancer's own skill names → the words we use in the profile.
+ALIASES = {
+    "artificial intelligence": "ai development", "ai": "ai development", "ai development": "ai development",
+    "chatgpt": "openai", "openai api": "openai", "gpt-4": "openai", "gpt": "openai",
+    "machine learning (ml)": "machine learning", "ml": "machine learning",
+    "chatbot": "ai chatbot", "ai chatbot development": "ai chatbot", "chatbot development": "ai chatbot",
+    "natural language processing": "nlp", "large language model": "large language models", "llm": "large language models",
+    "generative ai": "large language models", "genai": "large language models", "prompt engineering": "large language models",
+    "ai agent development": "ai agents", "agentic ai": "ai agents", "ai agents": "ai agents",
+    "retrieval augmented generation": "rag", "retrieval-augmented generation": "rag",
+    "api": "rest api", "api development": "rest api", "api integration": "rest api", "restful api": "rest api",
+    "whatsapp": "whatsapp api", "whatsapp business api": "whatsapp api", "whatsapp bot": "whatsapp api",
+    "image processing": "computer vision", "object detection": "computer vision", "video processing": "computer vision",
+    "automation": "automation", "workflow automation": "automation", "ai automation": "automation",
+    "google gemini": "gemini", "anthropic claude": "claude", "react": "react.js", "reactjs": "react.js",
+    "node.js": "node.js", "data science": "machine learning", "deep learning": "machine learning",
+    "tensorflow": "tensorflow", "pytorch": "pytorch", "django": "rest api", "flask": "rest api",
+}
+
+
+def _norm(skill: str) -> str:
+    s = skill.lower().strip()
+    if s in ALIASES:
+        return ALIASES[s]
+    s2 = re.sub(r"\s*\(.*?\)", "", s).strip()          # "machine learning (ml)" → "machine learning"
+    return ALIASES.get(s2, s2)
+
+
 def _skill_score(p: Project, profile: Profile) -> tuple[float, list[str]]:
-    mine = {s.lower() for s in profile.all_skills}
-    primary = {s.lower() for s in profile.skills_primary}
-    tags = [s.lower() for s in p.skills]
-    hits = [t for t in tags if t in mine]
-    prim_hits = [t for t in tags if t in primary]
+    mine = {_norm(s) for s in profile.all_skills}
+    primary = {_norm(s) for s in profile.skills_primary}
+    tags = p.skills
+    hits = [t for t in tags if _norm(t) in mine]
+    prim_hits = [t for t in tags if _norm(t) in primary]
     ratio = len(hits) / len(tags) if tags else 0.0
     # Keyword hits in text for skills the project didn't tag.
     text_toks = set(tokenize(p.text))
     kw_hits = [s for s in profile.skills_primary if set(tokenize(s)) and set(tokenize(s)) <= text_toks]
-    score = 22 * ratio + min(len(prim_hits), 3) * 3 + min(len(kw_hits), 4) * 1.0
+    score = 22 * ratio + min(len(prim_hits), 3) * 3 + min(len(kw_hits), 4) * 1.5
     reasons = []
     if hits:
         reasons.append(f"skills match {len(hits)}/{len(tags)}: {', '.join(hits[:5])}")
