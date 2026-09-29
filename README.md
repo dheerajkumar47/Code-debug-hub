@@ -11,7 +11,7 @@ Official Freelancer API → rule filter → fit score (0-100) → portfolio matc
 ```
 
 ## Quick start
-**Fastest:** follow **[docs/07-QUICK-START.md](docs/07-QUICK-START.md)**: 2 keys, then double-click `start.bat`.
+**Start here:** [docs/08-STEP-BY-STEP.md](docs/08-STEP-BY-STEP.md), every click from token to first bid.
 
 ```bash
 pip install -r requirements.txt
