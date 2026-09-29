@@ -1,18 +1,10 @@
 @echo off
-REM Update BidSmith to the latest version. Keeps your keys (.env) and history (data folder).
+REM Update BidSmith. Your browser downloads the new version (the repo is private); keys and history are kept.
 cd /d "%~dp0"
-echo Downloading the latest BidSmith...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ErrorActionPreference='Stop';" ^
-  "$zip = Join-Path $env:TEMP 'bidsmith_update.zip'; $tmp = Join-Path $env:TEMP 'bidsmith_update';" ^
-  "Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/dheerajkumar47/Code-debug-hub/archive/refs/heads/claude/funny-noether-d41u0f.zip' -OutFile $zip;" ^
-  "if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force };" ^
-  "Expand-Archive -Path $zip -DestinationPath $tmp -Force;" ^
-  "$src = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName;" ^
-  "robocopy $src . /E /NFL /NDL /NJH /NJS /XD .venv data /XF .env keys.txt update.bat | Out-Null;" ^
-  "Write-Host 'Updated. Your keys and history were kept.'"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\update.ps1" -BotDir "%~dp0."
 if errorlevel 1 (
-  echo Update failed - check your internet connection and try again.
+  echo.
+  echo Update did not finish. You can also download the ZIP yourself - see docs\08-STEP-BY-STEP.md
   pause
   exit /b 1
 )
