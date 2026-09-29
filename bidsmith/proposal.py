@@ -83,6 +83,17 @@ def template_bid(p: Project, profile: Profile, proof, price: Price, instr: dict,
     return "\n\n".join(lines)
 
 
+def _obey_instructions(text: str, instr: dict) -> str:
+    """Guarantee the client's hidden instructions are followed, even if the AI forgot."""
+    start = instr.get("start_with")
+    if start and not text.lower().lstrip(" \"'").startswith(start.lower()):
+        text = f"{start}\n\n{text}"
+    missing = [t for t in instr.get("include", []) if t.lower() not in text.lower()]
+    if missing:
+        text = text.rstrip() + "\n\n(" + ", ".join(missing) + ")"
+    return text
+
+
 def _numbers(price: Price) -> tuple:
     return (price.amount, price.amount_usd, price.period_days)
 
@@ -126,6 +137,7 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
     if not text:
         text = template_bid(p, profile, proof, price, instr, questions)
 
+    text = _obey_instructions(text, instr)
     report = quality.check(text, p, corpus, style, _numbers(price))
     return Draft(project_id=p.id, text=text, price=price, quality=report,
                  portfolio_used=[i.title for i, _ in proof])

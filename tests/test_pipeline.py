@@ -71,3 +71,13 @@ def test_auto_submit_is_opt_in_and_capped(make_bot, projects):
     bot = make_bot(auto_submit=True, auto_submit_min_score=1, max_bids_per_day=0)
     bot.process([p], NOW)
     assert bot.client.bids == []  # cap of 0 blocks it
+
+
+def test_ai_forgetting_client_instruction_is_fixed_automatically(make_bot, projects):
+    forgot = ("You need a WhatsApp assistant for clinic FAQs and bookings into Google Calendar in English and Urdu. "
+              "I built an AI Receptionist on WhatsApp with booking and voice replies. Plan: 1) map FAQs, "
+              "2) connect WhatsApp Business API and Google Calendar, 3) test bookings, 4) deploy. "
+              "Which calendar holds staff availability? — Dheeraj")
+    bot = make_bot(llm=FakeLLM([forgot]))
+    bot.process([projects[40100002]], NOW)
+    assert bot.store.get_draft(40100002)["text"].lower().startswith("banana")

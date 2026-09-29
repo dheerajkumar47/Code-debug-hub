@@ -11,7 +11,7 @@ from dataclasses import asdict
 from . import proposal, quality
 from .config import Profile, Settings
 from .filters import rule_filter
-from .freelancer import FreelancerClient, FreelancerError
+from .freelancer import FreelancerAuthError, FreelancerClient, FreelancerError
 from .llm import LLM
 from .models import Price, Project
 from .notify import Card, ConsoleNotifier, WebNotifier, WhatsAppNotifier
@@ -44,15 +44,21 @@ class BidSmith:
         self.llm = llm
         self.index = PortfolioIndex(profile.portfolio)
         self.notifiers = notifiers if notifiers is not None else [ConsoleNotifier()]
+        remembered = store.kv_get("llm_model")
+        if llm is not None and remembered and not settings.llm_model:
+            llm.model = remembered  # a model that worked last time (Google retires names)
+
+    def remember_model(self) -> None:
+        if self.llm is not None and getattr(self.llm, "model", None):
+            self.store.kv_set("llm_model", self.llm.model)
 
     # ---------------------------------------------------------------- build
     @classmethod
     def from_settings(cls, s: Settings) -> "BidSmith":
         profile = Profile.load(s.profile_path)
         store = Store(s.db_path)
-        client = None
-        if s.freelancer_token:
-            client = FreelancerClient(s.freelancer_token, s.freelancer_api_url, s.freelancer_site_url)
+        # Always create the client: project search is public; bidding only needs the token.
+        client = FreelancerClient(s.freelancer_token or None, s.freelancer_api_url, s.freelancer_site_url)
         llm = LLM(s.llm_provider, s.llm_api_key, s.llm_model, s.llm_base_url)
         notifiers = []
         for ch in s.notify_channels:
@@ -98,8 +104,6 @@ class BidSmith:
         return self.store.kv_get("paused") == "1"
 
     def discover(self) -> list[Project]:
-        if not self.client:
-            raise RuntimeError("Freelancer client not configured (FREELANCER_OAUTH_TOKEN)")
         search = self.profile.search
         found: dict[int, Project] = {}
         for q in search.get("queries", [""]):
@@ -148,23 +152,43 @@ class BidSmith:
     def run_once(self) -> dict:
         if self.paused():
             return {"paused": True}
-        return self.process(self.discover())
+        stats = self.process(self.discover())
+        self.remember_model()
+        return stats
 
     # -------------------------------------------------------------- safety
     def _can_auto_submit(self, score: int, quality_ok: bool) -> bool:
-        return (self.s.auto_submit and quality_ok and score >= self.s.auto_submit_min_score
+        return (self.s.auto_submit and quality_ok and self.can_bid() and score >= self.s.auto_submit_min_score
                 and self.store.bids_since(time.time() - 86400) < self.s.max_bids_per_day
                 and time.time() - self.store.last_bid_at() >= self.s.min_seconds_between_bids)
 
     # ------------------------------------------------------------- actions
+    MANUAL = "📋 Press Copy, then Open, and paste the bid on Freelancer. Then press ✔ Done."
+
+    def can_bid(self) -> bool:
+        """False → manual mode: the bot still finds, scores and writes; you paste the bid yourself."""
+        if not self.client:
+            return False
+        check = getattr(self.client, "can_bid", None)
+        return check() if check else True
+
+    def mark_done(self, pid: int) -> str:
+        if not self.store.get_project(pid):
+            return f"❓ #{pid} not found"
+        d = self.store.get_draft(pid) or {}
+        self.store.save_bid(pid, None, d.get("amount", 0), d.get("amount_usd", 0), d.get("period_days", 0), "placed",
+                            {"manual": True})
+        self.store.set_status(pid, "bid_placed", "placed manually")
+        return f"✔ Marked #{pid} as bid"
+
     def approve(self, pid: int, source: str = "owner") -> str:
         row, d = self.store.get_project(pid), self.store.get_draft(pid)
         if not row or not d:
             return f"❓ #{pid} not found"
         if row["status"] in ("bid_placed", "auto_bid"):
             return f"ℹ️ Already bid on #{pid}"
-        if not self.client:
-            return "⚠️ Freelancer API not configured"
+        if not self.can_bid():
+            return self.MANUAL
         if source == "owner" and self.store.bids_since(time.time() - 86400) >= self.s.max_bids_per_day:
             log.warning("daily cap reached but owner approved #%s manually", pid)
         wait = self.s.min_seconds_between_bids - (time.time() - self.store.last_bid_at())
@@ -175,14 +199,13 @@ class BidSmith:
         try:
             res = self.client.place_bid(pid, d["amount"], d["period_days"], d["text"],
                                         d["milestone_percentage"] or self.s.milestone_percentage)
+        except FreelancerAuthError:
+            return self.MANUAL  # token not accepted for bidding; the card stays so you can paste it
         except FreelancerError as e:
             self.store.set_status(pid, "bid_failed", str(e))
             self.store.save_bid(pid, None, d["amount"], d["amount_usd"], d["period_days"], "failed",
                                 {"error": str(e)})
-            hint = ""
-            if any(k in str(e).lower() for k in ("scope", "permission", "unauthorized", "forbidden", "403")):
-                hint = " — your token can't place bids yet. Use 📋 Copy on the dashboard and paste the bid on Freelancer."
-            return f"❌ Bid failed on #{pid}: {e}{hint}"
+            return f"❌ Bid failed on #{pid}: {e}. " + self.MANUAL
         bid_id = (res or {}).get("id")
         self.store.save_bid(pid, bid_id, d["amount"], d["amount_usd"], d["period_days"], "placed", res)
         self.store.set_status(pid, "auto_bid" if source == "auto" else "bid_placed", f"bid {bid_id}")

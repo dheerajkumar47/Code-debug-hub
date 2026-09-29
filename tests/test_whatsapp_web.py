@@ -80,3 +80,15 @@ def test_webhook_flow_and_dashboard(make_bot, projects):
     assert client.get("/").status_code == 401
     assert client.get("/", auth=("owner", "pw")).status_code == 200
     assert client.get("/health").json()["ok"]
+
+
+def test_copy_paste_mode_dashboard_and_approve(make_bot, projects):
+    bot = make_bot(dashboard_password="pw")
+    bot.client.can_bid = lambda: False
+    bot.process([projects[40100001]], NOW)
+    assert bot.approve(40100001) == bot.MANUAL
+    assert bot.client.bids == [] and bot.store.get_project(40100001)["status"] == "pending"
+    page = TestClient(create_app(bot, run_loop=False)).get("/", auth=("owner", "pw")).text
+    assert "Copy &amp; paste mode" in page and "✔ Done" in page and "✅ Place bid" not in page
+    assert bot.mark_done(40100001).startswith("✔")
+    assert bot.store.get_project(40100001)["status"] == "bid_placed"

@@ -9,6 +9,7 @@ Endpoints mirror the official SDK (github.com/freelancer/freelancer-sdk-python):
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Iterable
 
 import httpx
@@ -22,38 +23,92 @@ class FreelancerError(RuntimeError):
     pass
 
 
+class FreelancerAuthError(FreelancerError):
+    pass
+
+
 class FreelancerClient:
-    def __init__(self, token: str, api_url: str = "https://www.freelancer.com/api",
+    """Search works without a token (public API). Bidding needs a token that Freelancer accepts.
+
+    Freelancer accepts the token in one of two headers; we try both once and remember the one that works.
+    """
+
+    RECHECK_SECONDS = 900
+
+    def __init__(self, token: str | None = None, api_url: str = "https://www.freelancer.com/api",
                  site_url: str = "https://www.freelancer.com", timeout: float = 20.0,
                  transport: httpx.BaseTransport | None = None):
-        if not token:
-            raise FreelancerError("FREELANCER_OAUTH_TOKEN is not set")
         self.site_url = site_url.rstrip("/")
-        self._http = httpx.Client(
-            base_url=api_url.rstrip("/"),
-            headers={"Freelancer-OAuth-V1": token, "Authorization": f"Bearer {token}",
-                     "User-Agent": "BidSmith/0.1 (personal)"},
-            timeout=timeout,
-            transport=transport,
-        )
+        self._http = httpx.Client(base_url=api_url.rstrip("/"), timeout=timeout, transport=transport,
+                                  headers={"User-Agent": "BidSmith/0.1 (personal)"})
+        self._auth_options = [{"Freelancer-OAuth-V1": token}, {"Authorization": f"Bearer {token}"}] if token else []
+        self._auth: dict | None = None
         self._self_id: int | None = None
+        self._auth_failed_at = 0.0
+        self.auth_error = "" if token else "no Freelancer token"
 
     # ------------------------------------------------------------------
-    def _request(self, method: str, path: str, **kw) -> Any:
-        r = self._http.request(method, path, **kw)
+    def _send(self, method: str, path: str, headers: dict | None = None, **kw):
+        r = self._http.request(method, path, headers=headers or {}, **kw)
         try:
             data = r.json()
         except ValueError:
-            raise FreelancerError(f"{method} {path}: HTTP {r.status_code} (non-JSON)")
+            data = {}
         if r.status_code >= 400 or data.get("status") == "error":
-            raise FreelancerError(
-                f"{method} {path}: HTTP {r.status_code} {data.get('error_code', '')} {data.get('message', '')}".strip())
-        return data.get("result", data)
+            msg = f"{method} {path}: HTTP {r.status_code} {data.get('error_code', '')} {data.get('message', '')}".strip()
+            return r.status_code, None, msg
+        return r.status_code, data.get("result", data), ""
+
+    def _request(self, method: str, path: str, auth: bool = True, **kw) -> Any:
+        """auth=False: try without token first (public endpoints), fall back to the token on 401/403."""
+        if not auth:
+            code, result, msg = self._send(method, path, **kw)
+            if code not in (401, 403):
+                if msg:
+                    raise FreelancerError(msg)
+                return result
+        return self._authed(method, path, **kw)
+
+    def _authed(self, method: str, path: str, **kw) -> Any:
+        if self._auth is not None:
+            code, result, msg = self._send(method, path, self._auth, **kw)
+            if msg:
+                raise (FreelancerAuthError if code in (401, 403) else FreelancerError)(msg)
+            return result
+        if not self._auth_options:
+            raise FreelancerAuthError(self.auth_error)
+        last = ""
+        for headers in self._auth_options:
+            code, result, msg = self._send(method, path, headers, **kw)
+            if code in (401, 403):
+                last = msg
+                continue
+            if msg:
+                raise FreelancerError(msg)
+            self._auth = headers
+            return result
+        self.auth_error = last
+        raise FreelancerAuthError(last)
 
     def self_id(self) -> int:
         if self._self_id is None:
-            self._self_id = int(self._request("GET", "/users/0.1/self/")["id"])
+            self._self_id = int(self._authed("GET", "/users/0.1/self/")["id"])
         return self._self_id
+
+    def can_bid(self) -> bool:
+        """True when the token is accepted. Failed checks are retried every 15 minutes, never spammed."""
+        if self._self_id is not None:
+            return True
+        if not self._auth_options or time.time() - self._auth_failed_at < self.RECHECK_SECONDS:
+            return False
+        try:
+            self.self_id()
+            self.auth_error = ""
+            return True
+        except FreelancerError as e:
+            self.auth_error = str(e)
+            self._auth_failed_at = time.time()
+            return False
 
     def search_active(self, query: str = "", job_ids: Iterable[int] = (), project_types: Iterable[str] = (),
                       limit: int = 30, offset: int = 0) -> list[Project]:
@@ -66,7 +121,7 @@ class FreelancerClient:
         ]
         params += [("jobs[]", j) for j in job_ids]
         params += [("project_types[]", t) for t in project_types]
-        result = self._request("GET", "/projects/0.1/projects/active/", params=params)
+        result = self._request("GET", "/projects/0.1/projects/active/", auth=False, params=params)
         users = result.get("users") or {}
         return [parse_project(p, users, self.site_url) for p in result.get("projects", [])]
 

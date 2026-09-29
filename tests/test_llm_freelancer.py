@@ -49,10 +49,11 @@ def test_freelancer_client_search_and_bid():
     ps = c.search_active("rag", job_ids=[13], project_types=["fixed"])
     assert ps[0].url == "https://www.freelancer.com/projects/python/rag-bot"
     assert ps[0].client.payment_verified and ps[0].skills == ["Python"]
-    assert calls[0].headers["Freelancer-OAuth-V1"] == "TOKEN"
+    assert "Freelancer-OAuth-V1" not in calls[0].headers  # search is public, no token sent
     assert ("jobs[]", "13") in calls[0].url.params.multi_items()
 
     assert c.place_bid(1, 250, 7, "text")["id"] == 999
+    assert calls[-1].headers["Freelancer-OAuth-V1"] == "TOKEN"
     body = json.loads(calls[-1].content)
     assert body == {"project_id": 1, "bidder_id": 42, "amount": 250.0, "period": 7,
                     "milestone_percentage": 50, "description": "text"}
@@ -112,3 +113,32 @@ def test_gemini_busy_retries_then_switches_model():
     assert llm.complete("s", "u") == "OK"
     assert llm.model == "gemini-3.8-flash-lite"
     assert sum("flash-latest:" in c for c in calls) == 3  # retried before switching
+
+
+def _auth_handler(accept: str | None):
+    """Server that accepts the token only in the given header ('oauth', 'bearer' or None)."""
+    def handler(req: httpx.Request):
+        ok = (accept == "oauth" and req.headers.get("Freelancer-OAuth-V1") == "TOK") or \
+             (accept == "bearer" and req.headers.get("Authorization") == "Bearer TOK")
+        if req.url.path.endswith("/projects/active/"):
+            return httpx.Response(200, json={"status": "success", "result": {"projects": [], "users": {}}})
+        if not ok:
+            return httpx.Response(401, json={"status": "error", "error_code": "NOT_AUTHENTICATED",
+                                             "message": "You must be logged in"})
+        if req.url.path.endswith("/self/"):
+            return httpx.Response(200, json={"status": "success", "result": {"id": 7}})
+        return httpx.Response(200, json={"status": "success", "result": {"id": 1}})
+    return handler
+
+
+def test_token_accepted_via_bearer_header():
+    c = FreelancerClient("TOK", transport=httpx.MockTransport(_auth_handler("bearer")))
+    assert c.can_bid() and c.self_id() == 7
+    assert c.place_bid(1, 100, 3, "x")["id"] == 1
+
+
+def test_rejected_token_means_copy_paste_mode_not_crash():
+    c = FreelancerClient("TOK", transport=httpx.MockTransport(_auth_handler(None)))
+    assert c.search_active("python") == []      # search still works
+    assert c.can_bid() is False and "logged in" in c.auth_error
+    assert FreelancerClient(None, transport=httpx.MockTransport(_auth_handler(None))).can_bid() is False
