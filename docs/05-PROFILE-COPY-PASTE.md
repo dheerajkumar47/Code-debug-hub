@@ -59,62 +59,13 @@ If your plan allows more, add: `LangGraph, RAG, Generative AI, Prompt Engineerin
 ## ✅ Step 5: Cover photo
 Upload **`profile/images/00-cover-banner.png`**.
 
-## ✅ Step 6: Portfolio (delete nothing; add the new ones first so they show at the top)
-For each item: **Title → Description → Skills → Link → Image**.
+## ✅ Step 6: Portfolio: use **[06-PORTFOLIO-ITEMS.md](06-PORTFOLIO-ITEMS.md)**
+All 8 items are rewritten for Freelancer's *Create a portfolio item* form:
+- title ≤ 36 characters, description ≤ 2,000;
+- tags, tools, skills and industry filled in;
+- 2 images each at 1600 × 1200 (a cover plus a "How it works" diagram).
 
----
-**① NEW: AI Receptionist: WhatsApp, Instagram & Messenger AI Agent with Booking**
-Image: `01-ai-receptionist.png` · Link: https://github.com/dheerajkumar47/AI-receptionist
-```
-Problem: small businesses miss customer messages and bookings outside working hours.
-What I built: an AI receptionist that answers customers 24/7 on WhatsApp, Messenger, Instagram and X, understands natural language, books appointments straight into Outlook / Microsoft 365, sends confirmation emails with calendar invites, follows up with reminders, and can reply with voice notes in English or Urdu. A web dashboard lets the owner monitor chats and take over at any time. Credentials are stored encrypted.
-Stack: Azure OpenAI, Azure AI Speech, Microsoft Graph, Meta Graph API, Twilio, .NET / ASP.NET Core, Blazor, SQLite, GitHub Actions, Azure.
-```
-Skills: `AI Chatbot, WhatsApp API, AI Agents, Azure, Automation`
-
----
-**② NEW: Real-Time CCTV Employee Tracking: YOLO + ArUco Computer Vision**
-Image: `02-cctv-tracking.png` · Link: https://github.com/dheerajkumar47/Gumcorp
-```
-Problem: a factory needed to know where employees are and how they move, from its existing CCTV cameras.
-What I built: a real-time system that reads live RTSP camera feeds, detects people with YOLO on GPU (CUDA), identifies each employee with ArUco markers, draws movement trails, records a clip per employee, builds heatmaps and shows everything on a live web dashboard with CPU/GPU monitoring. Logs to JSON/CSV for reporting.
-Stack: Python, YOLO, OpenCV, ArUco, CUDA, RTSP, HTML/JS dashboard.
-```
-Skills: `Computer Vision, OpenCV, Python, Deep Learning, Machine Learning (ML)`
-
----
-**③ NEW: RAG Chatbot with LangGraph Router: Vector Search + Web Search**
-Image: `03-rag-langgraph.png` · Link: https://github.com/dheerajkumar47/IntelliCourse
-```
-Problem: students wasted time searching long PDF course catalogues.
-What I built: an AI advisor with a LangGraph agent that routes each question to the right tool — a vector retriever over the catalogue (Pinecone + sentence embeddings) or live web search (Tavily) — then generates a grounded answer. FastAPI backend, web UI with query history.
-Stack: FastAPI, LangChain, LangGraph, Pinecone, Hugging Face embeddings, Google Gemini, Tavily.
-```
-Skills: `LangChain, AI Chatbot, Large Language Models, FastAPI, Python`
-
----
-**④ UPDATE your existing "AI Stock Market Dashboard (PSX)"**: replace the description with:
-Image: `04-psx-dashboard.png` · Link: https://pak-industry-insight.vercel.app/
-```
-Problem: retail investors in Pakistan have no single place for live PSX data plus clear analysis.
-What I built: an investor dashboard for PSX-listed companies — live price and volume, sector heatmaps, USD/PKR tracking, watchlists and filters — plus AI-generated daily market summaries and a SWOT report for each company. Secure login with OAuth + JWT. Live on Vercel with the API on Render.
-Stack: FastAPI (async), React + Vite + Tailwind, MongoDB, Google Gemini.
-```
-
----
-**⑤ NEW: Multi-Agent AI Interview Platform: ATS Scoring + 4 AI Agents**
-Image: `05-interview-agents.png` · Link: https://github.com/dheerajkumar47/Interview-Pilot
-```
-Problem: candidates need realistic interview practice and honest feedback before applying.
-What I built: a platform where four AI agents (Resume Analyst, Technical Interviewer, Knowledge Assessor, HR Coach) run a full mock hiring process — ATS resume scoring against a job description, coding and MCQ rounds, behavioural questions and a final readiness verdict with analytics. Uses Gemini with automatic fallback to Groq Llama for reliability.
-Stack: Next.js, TypeScript, Node.js, Express, Socket.io, Gemini, Groq, Supabase/PostgreSQL.
-```
-Skills: `AI Agents, Large Language Models, Next.js, Node.js, AI Development`
-
----
-**⑥ ⑦ ⑧ KEEP** "AI Meeting Intelligence", "AI QA Platform" and "Time-Series Anomaly Detection". Just replace their images with `06-…`, `07-…` and `08-…` so all your cards match.
-
----
+Replace your 4 existing items with the new versions too, so every card matches.
 
 ## ✅ Step 7: Experience (edit both entries)
 

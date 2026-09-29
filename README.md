@@ -42,4 +42,5 @@ Full setup (Freelancer token, WhatsApp Cloud API, AI key, hosting): **[docs/04-s
 - [02: Analysis and requirements](docs/02-analysis-and-requirements.md)
 - [03: Your profile audit and rewrite](docs/03-profile-audit-and-rewrite.md)
 - [04: Setup guide](docs/04-setup.md)
-- [05: **Profile copy-paste pack**](docs/05-PROFILE-COPY-PASTE.md) + images in `profile/images/`
+- [05: **Profile copy-paste pack**](docs/05-PROFILE-COPY-PASTE.md)
+- [06: **Portfolio items**, form-ready](docs/06-PORTFOLIO-ITEMS.md) + 17 images in `profile/images/` (regenerate with `python tools/make_profile_images.py`)
