@@ -1,0 +1,17 @@
+services:
+  bidsmith:
+    build: .
+    env_file: .env
+    ports: ["8000:8000"]
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile
+    restart: unless-stopped
+
+  # Free public HTTPS URL for the WhatsApp webhook (no domain or port-forwarding needed).
+  # The URL is printed in the logs: `docker compose logs tunnel | grep trycloudflare`
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://bidsmith:8000
+    depends_on: [bidsmith]
+    restart: unless-stopped

@@ -133,3 +133,13 @@ Based on the 60 systems in [01-market-research.md](01-market-research.md).
 4. Approval-only, or auto-submit for very high scores?
 5. Which LLM provider or API key you prefer (Claude, OpenAI, or local).
 6. Hosting: your own VPS, a free tier, or local PC? Stack: Python code, or n8n first?
+
+### Answers (2026-09-29, from your profile, GitHub and messages)
+| # | Question | Answer used in the build |
+|---|---|---|
+| 1 | Skills and rate floors | AI engineer: RAG, agents, WhatsApp AI, computer vision, FastAPI. Floors: **$15/hr**, **$30 fixed**, target $20/hr (see `profile/owner_profile.yaml` and doc 03). |
+| 2 | Membership plan | **Still unknown.** It decides your monthly bid count. Tell me and I'll set `MAX_BIDS_PER_DAY` to match. |
+| 3 | Portfolio | 9 items pulled from your profile and GitHub (AI Receptionist, CCTV tracking, IntelliCourse RAG, PSX, Interview-Pilot, AI Tutor, Anomaly, Meeting AI, QA). |
+| 4 | Approval mode | **Approval-only by default.** Auto-bid is available but off. |
+| 5 | LLM | Provider-agnostic. **Gemini recommended to start** (free tier). OpenAI, Claude, Groq and OpenRouter also supported. |
+| 6 | Stack and hosting | Python code (not n8n). Your PC plus a Cloudflare tunnel, or a free always-on VM. **WhatsApp replaces Telegram** (Telegram needs a VPN for you). |
