@@ -1,0 +1,68 @@
+{
+  "status": "success",
+  "result": {
+    "projects": [
+      {
+        "id": 40100001, "owner_id": 9001, "title": "RAG chatbot for our internal PDF knowledge base",
+        "seo_url": "python/rag-chatbot-internal-pdf",
+        "description": "We have ~800 internal PDFs (HR policies, SOPs). Need a RAG chatbot with FastAPI backend and a simple React chat widget. Must cite sources and not hallucinate. Which vector database would you use? Deploy with Docker.",
+        "type": "fixed", "currency": {"code": "USD", "exchange_rate": 1.0},
+        "budget": {"minimum": 250, "maximum": 750}, "bid_stats": {"bid_count": 7, "bid_avg": 480},
+        "jobs": [{"id": 13, "name": "Python"}, {"id": 2701, "name": "RAG"}, {"id": 1987, "name": "LangChain"}, {"id": 2551, "name": "FastAPI"}],
+        "upgrades": {}
+      },
+      {
+        "id": 40100002, "owner_id": 9002, "title": "WhatsApp AI assistant for beauty clinic bookings",
+        "seo_url": "ai-chatbot/whatsapp-assistant-beauty-clinic",
+        "description": "Build a WhatsApp Business API bot that answers FAQs and books appointments into Google Calendar. English and Urdu. To show you read this, start your bid with the word banana. What is your timeline?",
+        "type": "fixed", "currency": {"code": "USD", "exchange_rate": 1.0},
+        "budget": {"minimum": 100, "maximum": 300}, "bid_stats": {"bid_count": 18, "bid_avg": 210},
+        "jobs": [{"id": 3001, "name": "AI Chatbot"}, {"id": 3002, "name": "WhatsApp API"}, {"id": 13, "name": "Python"}],
+        "upgrades": {}
+      },
+      {
+        "id": 40100003, "owner_id": 9003, "title": "Logo design for coffee shop",
+        "seo_url": "logo-design/coffee-shop",
+        "description": "Need a modern logo design for my coffee shop brand.",
+        "type": "fixed", "currency": {"code": "USD", "exchange_rate": 1.0},
+        "budget": {"minimum": 30, "maximum": 250}, "bid_stats": {"bid_count": 55, "bid_avg": 60},
+        "jobs": [{"id": 32, "name": "Logo Design"}], "upgrades": {}
+      },
+      {
+        "id": 40100004, "owner_id": 9004, "title": "YOLO people counting on CCTV cameras",
+        "seo_url": "computer-vision/yolo-people-counting-cctv",
+        "description": "Count people entering/leaving a shop from 4 RTSP CCTV cameras using YOLO and OpenCV. Show a dashboard with hourly counts.",
+        "type": "fixed", "currency": {"code": "INR", "exchange_rate": 0.012},
+        "budget": {"minimum": 12500, "maximum": 37500}, "bid_stats": {"bid_count": 12, "bid_avg": 22000},
+        "jobs": [{"id": 1400, "name": "Computer Vision"}, {"id": 1401, "name": "OpenCV"}, {"id": 13, "name": "Python"}],
+        "upgrades": {}
+      },
+      {
+        "id": 40100005, "owner_id": 9005, "title": "Build Uber clone app",
+        "seo_url": "mobile/uber-clone",
+        "description": "Need a clone of uber with rider and driver apps. Very low budget. Contact me on whatsapp.",
+        "type": "fixed", "currency": {"code": "USD", "exchange_rate": 1.0},
+        "budget": {"minimum": 30, "maximum": 250}, "bid_stats": {"bid_count": 40, "bid_avg": 140},
+        "jobs": [{"id": 44, "name": "Mobile App Development"}], "upgrades": {}
+      },
+      {
+        "id": 40100006, "owner_id": 9002, "title": "Confidential LLM agent project",
+        "seo_url": "ai/confidential-llm-agent",
+        "description": "AI agent with LangGraph. NDA required.",
+        "type": "hourly", "currency": {"code": "USD", "exchange_rate": 1.0},
+        "budget": {"minimum": 15, "maximum": 25}, "bid_stats": {"bid_count": 3, "bid_avg": 20},
+        "jobs": [{"id": 3100, "name": "AI Agents"}], "upgrades": {"NDA": true}
+      }
+    ],
+    "users": {
+      "9001": {"id": 9001, "status": {"payment_verified": true}, "location": {"country": {"name": "United States"}},
+               "employer_reputation": {"entire_history": {"overall": 4.9, "reviews": 12, "complete": 14}}},
+      "9002": {"id": 9002, "status": {"payment_verified": true}, "location": {"country": {"name": "United Arab Emirates"}},
+               "employer_reputation": {"entire_history": {"overall": 0, "reviews": 0, "complete": 0}}},
+      "9003": {"id": 9003, "status": {"payment_verified": false}, "location": {"country": {"name": "Canada"}}},
+      "9004": {"id": 9004, "status": {"payment_verified": true}, "location": {"country": {"name": "India"}},
+               "employer_reputation": {"entire_history": {"overall": 4.6, "reviews": 5, "complete": 6}}},
+      "9005": {"id": 9005, "status": {"payment_verified": false}, "location": {"country": {"name": "Nigeria"}}}
+    }
+  }
+}

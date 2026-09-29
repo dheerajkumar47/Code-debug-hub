@@ -1,0 +1,146 @@
+# Owner knowledge base. The proposal writer may ONLY claim what is written here.
+# Every line was taken from your Freelancer profile or GitHub READMEs.
+# Items marked "CONFIRM" need you to check the number before real use.
+
+owner:
+  name: Dheeraj Kumar
+  freelancer_username: dheerajk85
+  headline: "AI Engineer | RAG Chatbots, AI Agents & WhatsApp AI"
+  location: Karachi, Pakistan
+  timezone: Asia/Karachi
+  reviews_count: 0          # update as reviews come in (pricing + tone adapt)
+  bio: >
+    AI engineer who builds production AI systems: RAG chatbots grounded in client data,
+    multi-step AI agents, WhatsApp/Messenger AI assistants, and real-time computer vision,
+    on clean Python/FastAPI backends deployed with Docker on AWS, Azure, Render or Vercel.
+
+rates:
+  hourly_floor_usd: 15      # never bid below this hourly
+  target_hourly_usd: 20
+  fixed_floor_usd: 30       # never bid below this for a fixed project
+
+skills:
+  primary: [Python, AI Development, RAG, LangChain, LangGraph, Large Language Models, AI Chatbot,
+            AI Agents, FastAPI, OpenAI, Gemini, Claude, Computer Vision, OpenCV, YOLO, WhatsApp API,
+            Automation]
+  secondary: [CrewAI, LlamaIndex, FAISS, Pinecone, pgvector, Whisper, Prophet, scikit-learn, PyTorch,
+              TensorFlow, Docker, MongoDB, PostgreSQL, React.js, Next.js, TypeScript, Azure, AWS,
+              Streamlit, REST API, Machine Learning, Data Extraction, n8n]
+
+facts:
+  - "BS Software Engineering, Iqra University (2021-2025)."
+  - "AI Engineer at Bitscollision (Jan-Dec 2025): multi-agent tool-using workflows (LangGraph, CrewAI) for message classification, routing and multi-step automation; RAG conversational pipelines; FastAPI microservices on Docker."
+  - "Independent AI engineer since Jan 2026, building AI and backend systems end to end for business clients."
+  - "Built a real-time computer vision employee-tracking system on CCTV cameras using YOLO and ArUco markers."   # CONFIRM camera count before adding "50+"
+  - "Every project ships with clear communication, clean code and documentation."
+
+portfolio:
+  - title: AI Receptionist - WhatsApp, Instagram & Messenger AI Agent with Booking
+    summary: >
+      Answers small-business customers 24/7 on WhatsApp, Messenger, Instagram and X, books
+      appointments in Outlook/Microsoft 365, sends .ics confirmations and reminders, and replies
+      with English/Urdu voice notes. Web dashboard for monitoring and human takeover.
+    stack: [Azure OpenAI, .NET, ASP.NET Core, Blazor, Azure AI Speech, Microsoft Graph, Meta Graph API, Twilio, SQLite]
+    result: "Multi-channel assistant with appointment booking and voice replies."
+    link: https://github.com/dheerajkumar47/AI-receptionist
+    tags: [whatsapp, chatbot, receptionist, booking, voice, customer support, messenger, instagram, calendar, ai agent]
+
+  - title: Real-Time CCTV Employee Tracking - YOLO + ArUco Computer Vision
+    summary: >
+      Processes live RTSP camera feeds, detects people with YOLO on CUDA, identifies employees with
+      ArUco markers, draws movement trails, records per-employee clips, generates heatmaps and shows
+      everything on a live dashboard with CPU/GPU telemetry.
+    stack: [Python, YOLO, OpenCV, ArUco, CUDA, RTSP]
+    result: "Live multi-camera tracking dashboard with heatmaps and per-employee recordings."
+    link: https://github.com/dheerajkumar47/Gumcorp
+    tags: [computer vision, cctv, object detection, tracking, yolo, opencv, surveillance, video analytics]
+
+  - title: RAG Chatbot with LangGraph Router - Pinecone + Web Search
+    summary: >
+      Course advisor that routes each question with a LangGraph agent: a vector retriever over the
+      course catalogue (Pinecone + MiniLM embeddings), a web-search tool (Tavily), and a generator
+      node that answers with grounded context. FastAPI backend with a web UI.
+    stack: [FastAPI, LangChain, LangGraph, Pinecone, HuggingFace embeddings, Gemini, Tavily]
+    result: "Answers catalogue questions without manual PDF browsing."
+    link: https://github.com/dheerajkumar47/IntelliCourse
+    tags: [rag, chatbot, langgraph, vector database, knowledge base, pdf, documents, agent]
+
+  - title: AI Stock Market Intelligence Dashboard (PSX)
+    summary: >
+      Investor dashboard for Pakistan Stock Exchange companies: live price/volume, sector heatmaps,
+      USD/PKR, watchlists, plus AI-generated daily market summaries and per-company SWOT reports.
+    stack: [FastAPI, React, Vite, Tailwind, MongoDB, Gemini, OAuth, JWT]
+    result: "Live app covering 100+ PSX-listed companies."   # CONFIRM exact count (profile says 79, README says 113+)
+    link: https://pak-industry-insight.vercel.app/
+    tags: [dashboard, finance, stock market, data, analytics, llm, summarization, react]
+
+  - title: Multi-Agent AI Interview Platform - ATS Scoring + 4 AI Agents
+    summary: >
+      Mock-interview platform with four agents (Resume Analyst, Technical Interviewer, Knowledge
+      Assessor, HR Coach), ATS resume scoring against a job description, coding/MCQ/behavioural
+      rounds and a readiness verdict. Gemini primary with Groq Llama fallback.
+    stack: [Next.js, TypeScript, Node.js, Express, Socket.io, Gemini, Groq, Supabase]
+    result: "End-to-end interview simulation with analytics."
+    link: https://github.com/dheerajkumar47/Interview-Pilot
+    tags: [multi-agent, hr, recruitment, resume, ats, llm, web app]
+
+  - title: AI Tutor with Long-Term Memory
+    summary: >
+      Multimodal tutor (text, image, audio, documents) with per-user semantic memory in FAISS,
+      LangChain function-calling agent, quiz generation, summarisation, SSE streaming, JWT auth
+      and per-user rate limiting.
+    stack: [FastAPI, LangChain, OpenAI, FAISS, SQLAlchemy, Docker]
+    result: "Personalised tutoring with persistent memory per user."
+    link: https://github.com/dheerajkumar47/AI-Tutor
+    tags: [education, chatbot, memory, rag, multimodal, agent]
+
+  - title: Time-Series Anomaly Detection - Prophet + Isolation Forest
+    summary: >
+      Detects anomalies in server metrics, financial transactions and IoT sensor data with Prophet
+      and Isolation Forest, evaluated on precision, recall, F1 and AUC-ROC. FastAPI + Streamlit, Dockerised.
+    stack: [Python, Prophet, scikit-learn, FastAPI, Streamlit, Plotly, Docker]
+    result: "Production-style anomaly service with evaluation metrics."
+    link: https://github.com/dheerajkumar47/Time-Series-Anomaly-Detection
+    tags: [machine learning, anomaly detection, time series, forecasting, iot, monitoring, data science]
+
+  - title: AI Meeting Intelligence
+    summary: >
+      Transcribes meeting recordings with Whisper and answers questions about every past meeting
+      with grounded RAG.
+    stack: [Python, Whisper, RAG, FastAPI]
+    result: "Searchable, question-answerable meeting history."
+    link: ""
+    tags: [transcription, speech to text, rag, meetings, summarization]
+
+  - title: AI QA Platform - Agents Generate Test Cases
+    summary: >
+      Multi-agent QA platform where agents generate test cases from tickets and screenshots, run UI
+      and API tests, and report results.
+    stack: [Python, AI Agents, LLM, API testing]
+    result: "Automated test-case generation and execution."
+    link: ""
+    tags: [qa, testing, automation, multi-agent, test cases]
+
+search:
+  # Each query runs against /projects/active. Keep them tight — quality over volume.
+  queries: ["RAG", "chatbot", "AI agent", "LangChain", "LLM", "OpenAI", "WhatsApp bot",
+            "computer vision", "YOLO", "FastAPI", "AI automation"]
+  job_ids: []               # optional Freelancer skill IDs to narrow search
+  project_types: [fixed, hourly]
+  min_budget_usd: 30
+  max_bid_count: 40          # skip crowded projects — saves bids
+  max_age_hours: 12          # fresh projects only; early bids win more
+  require_payment_verified: false   # true once you have reviews; false helps find first jobs
+  min_client_rating: 0              # 0 = allow new clients
+  blocked_countries: []
+  allowed_currencies: []            # empty = all
+  exclude_keywords: ["wordpress theme", "logo design", "data entry only", "homework", "assignment",
+                     "exam", "thesis writing", "adult", "casino", "crypto pump"]
+  skip_nda: true            # never auto-accept NDAs; review manually
+
+style:
+  min_words: 70
+  max_words: 170
+  max_chars: 1500           # Freelancer bid description limit
+  signature: "Dheeraj"
+  tone: "confident, plain English, specific, no fluff"

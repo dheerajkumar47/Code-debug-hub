@@ -1,337 +1,48 @@
-# 🔧 Code Debugging Knowledge Base
+# BidSmith: Personal AI Bid Agent for Freelancer.com
 
-A full-stack application that stores and retrieves debugging solutions from past developer issues, providing AI-powered suggestions using PostgreSQL, Node.js, OpenAI API, and Next.js.
+It finds Freelancer.com projects that match **your** profile, scores each one for fit, and writes a proposal
+grounded in your real portfolio. It suggests a price and delivery time, then sends you the draft on
+**WhatsApp** (or a mobile web dashboard). The bid is only placed when you tap **✅ Bid**.
 
-![Tech Stack](https://img.shields.io/badge/Tech_Stack-Next.js_14-blue)
-![Database](https://img.shields.io/badge/Database-PostgreSQL-blue)
-![AI](https://img.shields.io/badge/AI-OpenAI_GPT--4-green)
-![Deployment](https://img.shields.io/badge/Deploy-Vercel-black)
+```
+Official Freelancer API → rule filter → fit score (0-100) → portfolio match (RAG) → price engine
+   → AI draft → quality gate (clichés, client instructions, invented facts, length) → WhatsApp / dashboard
+   → you approve → bid placed via API → logged in SQLite
+```
 
-## ✨ Features
-
-- 🔍 **Smart Search**: Full-text search with filters by technology, category, and severity
-- 🤖 **AI Suggestions**: Generate solutions using OpenAI based on similar past issues
-- 📊 **Issue Management**: Create, update, and track debugging issues with detailed metadata
-- 💡 **Solution Library**: Community-driven solutions with effectiveness ratings
-- 🏷️ **Categorization**: Organize issues by technology stack, error types, and difficulty
-- 👥 **User Authentication**: Secure access with OAuth (Google, GitHub) and credentials
-- 📈 **Analytics**: Track popular searches and trending technologies
-- 🌙 **Dark Mode**: Modern UI with light/dark theme support
-- 📱 **Responsive Design**: Works seamlessly on desktop and mobile devices
-
-## 🏗️ Tech Stack
-
-### Frontend
-- **Framework**: Next.js 14 (React 18)
-- **Styling**: Tailwind CSS with custom design system
-- **UI Components**: Headless UI, Heroicons
-- **State Management**: React Hooks + Context API
-- **Authentication**: NextAuth.js
-
-### Backend
-- **Runtime**: Node.js 18+
-- **Database**: PostgreSQL 15 with Prisma ORM
-- **AI Integration**: OpenAI GPT-4 API
-- **Authentication**: JWT tokens, OAuth providers
-- **API**: RESTful API with TypeScript
-
-### Infrastructure
-- **Deployment**: Vercel (Frontend) + Railway/Neon (Database)
-- **Development**: Docker Compose
-- **Monitoring**: Built-in health checks and logging
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18 or higher
-- PostgreSQL 14+ (or use Docker)
-- Git
-- OpenAI API key
-
-### 1. Clone the Repository
+## Quick start
+**Start here:** [docs/08-STEP-BY-STEP.md](docs/08-STEP-BY-STEP.md), every click from token to first bid.
 
 ```bash
-git clone https://github.com/yourusername/debugging-knowledge-base.git
-cd debugging-knowledge-base
+pip install -r requirements.txt
+python -m bidsmith setup     # paste your tokens (hidden), writes .env
+python -m bidsmith check     # verifies them
+python -m bidsmith demo      # offline demo on sample projects, no keys needed
+pytest -q                    # 20 tests
 ```
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Environment Setup
-
-Copy the environment template and configure your variables:
-
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local` with your configuration:
-
-```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/debugging_kb?schema=public"
-
-# NextAuth.js
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key-here"
-
-# OpenAI API
-OPENAI_API_KEY="sk-your-openai-api-key"
-
-# OAuth Providers (Optional)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-GITHUB_CLIENT_ID="your-github-client-id"
-GITHUB_CLIENT_SECRET="your-github-client-secret"
-```
-
-### 4. Database Setup
-
-```bash
-# Start PostgreSQL (or use Docker)
-docker-compose up -d database
-
-# Run database migrations
-npm run db:migrate
-
-# Seed the database with sample data
-npm run db:seed
-```
-
-### 5. Start Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) to see the application.
-
-## 🐳 Docker Development
-
-For a complete development environment with all services:
-
-```bash
-# Start all services (app, database, redis, pgadmin)
-docker-compose up -d
-
-# View logs
-docker-compose logs -f app
-
-# Stop all services
-docker-compose down
-```
-
-Services will be available at:
-- **App**: http://localhost:3000
-- **Database**: localhost:5432
-- **PgAdmin**: http://localhost:8080 (admin@debugkb.com / admin123)
-- **Redis**: localhost:6379
-
-## 📁 Project Structure
-
-```
-debugging-kb/
-├── components/           # Reusable UI components
-│   ├── Layout.tsx       # Main layout wrapper
-│   ├── IssueList.tsx    # Issue listing component
-│   ├── SearchBar.tsx    # Search functionality
-│   └── ...
-├── lib/                 # Utility libraries
-│   ├── auth.ts          # Authentication configuration
-│   ├── db.ts            # Database utilities
-│   ├── openai.ts        # AI service integration
-│   └── ...
-├── pages/               # Next.js pages and API routes
-│   ├── api/             # API endpoints
-│   ├── issues/          # Issue pages
-│   ├── auth/            # Authentication pages
-│   └── ...
-├── prisma/              # Database schema and migrations
-│   ├── schema.prisma    # Database schema
-│   ├── migrations/      # Migration files
-│   └── seed.ts          # Database seeding
-├── styles/              # Global styles
-├── types/               # TypeScript type definitions
-└── public/              # Static assets
-```
-
-## 🔑 API Endpoints
-
-### Authentication
-- `POST /api/auth/signup` - User registration
-- `POST /api/auth/signin` - User login
-- `POST /api/auth/signout` - User logout
-
-### Issues
-- `GET /api/issues` - List issues with search/filters
-- `POST /api/issues` - Create new issue
-- `GET /api/issues/[id]` - Get specific issue
-- `PUT /api/issues/[id]` - Update issue
-- `DELETE /api/issues/[id]` - Delete issue
-
-### Solutions
-- `GET /api/solutions` - List solutions
-- `POST /api/solutions` - Create solution
-- `PUT /api/solutions/[id]` - Update solution
-- `DELETE /api/solutions/[id]` - Delete solution
-
-### AI Suggestions
-- `POST /api/ai/suggest` - Generate AI suggestion for issue
-
-### Analytics
-- `GET /api/stats` - Platform statistics
-- `GET /api/search/trends` - Trending searches
-
-## 🚀 Deployment
-
-### Vercel Deployment (Recommended)
-
-1. **Connect to Vercel**:
-   ```bash
-   npx vercel --prod
-   ```
-
-2. **Set Environment Variables** in Vercel dashboard:
-   - `DATABASE_URL` - Your production PostgreSQL URL
-   - `NEXTAUTH_SECRET` - Random secret for JWT
-   - `OPENAI_API_KEY` - Your OpenAI API key
-   - OAuth credentials (if using)
-
-3. **Database Setup**:
-   - Use [Neon](https://neon.tech) or [Supabase](https://supabase.com) for PostgreSQL
-   - Run migrations: `npx prisma migrate deploy`
-   - Seed database: `npm run db:seed`
-
-### Alternative: Railway
-
-1. **Create Railway Project**:
-   ```bash
-   npm install -g @railway/cli
-   railway login
-   railway init
-   ```
-
-2. **Add PostgreSQL**:
-   ```bash
-   railway add postgresql
-   ```
-
-3. **Deploy**:
-   ```bash
-   railway up
-   ```
-
-### Docker Production
-
-```bash
-# Build production image
-docker build -t debugging-kb .
-
-# Run container
-docker run -p 3000:3000 \
-  -e DATABASE_URL="your-production-db-url" \
-  -e NEXTAUTH_SECRET="your-secret" \
-  -e OPENAI_API_KEY="your-api-key" \
-  debugging-kb
-```
-
-## 🔧 Configuration
-
-### OpenAI Setup
-
-1. Create an account at [OpenAI](https://openai.com)
-2. Generate an API key
-3. Add to environment variables
-4. Configure rate limits and model preferences in `lib/openai.ts`
-
-### OAuth Setup
-
-#### Google OAuth
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project or select existing
-3. Enable Google+ API
-4. Create OAuth 2.0 credentials
-5. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
-
-#### GitHub OAuth
-1. Go to GitHub Settings > Developer settings > OAuth Apps
-2. Create a new OAuth App
-3. Set Authorization callback URL: `http://localhost:3000/api/auth/callback/github`
-
-## 📊 Database Schema
-
-Key entities and relationships:
-
-- **Users**: Authentication and profile information
-- **Issues**: Debugging problems with metadata
-- **Solutions**: Community-provided fixes
-- **Comments**: Discussion threads
-- **Categories**: Issue organization
-- **Technologies**: Tech stack tagging
-- **AI Suggestions**: Generated recommendations
-
-## 🧪 Testing
-
-```bash
-# Run unit tests
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run integration tests
-npm run test:integration
-
-# Run all tests with coverage
-npm run test:coverage
-```
-
-## 📈 Performance & Monitoring
-
-- **Database Indexing**: Optimized queries with proper indexes
-- **Caching**: Redis for session and API response caching
-- **Rate Limiting**: API endpoints protected from abuse
-- **Error Tracking**: Comprehensive logging and error handling
-- **Health Checks**: Built-in monitoring endpoints
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Use TypeScript for type safety
-- Follow ESLint configuration
-- Write tests for new features
-- Update documentation
-- Use conventional commit messages
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Next.js](https://nextjs.org) - React framework
-- [Prisma](https://prisma.io) - Database ORM
-- [OpenAI](https://openai.com) - AI API
-- [Tailwind CSS](https://tailwindcss.com) - Styling
-- [Vercel](https://vercel.com) - Deployment platform
-
-## 📞 Support
-
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/debugging-knowledge-base/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/yourusername/debugging-knowledge-base/discussions)
-
----
-
-**Made with ❤️ by Dheeraj, for developers**
+Full setup (Freelancer token, WhatsApp Cloud API, AI key, hosting): **[docs/04-setup.md](docs/04-setup.md)**
+
+## What makes it different from the 60 tools we researched
+- **Account-safe:** it uses the official API only, never a browser bot. You approve every bid by default. Opt-in auto-bid has a daily cap and spacing.
+- **No invented experience:** the quality gate blocks numbers or links that are not in your profile or the client's brief.
+- **Catches hidden client instructions:** for example, if the brief says "start your bid with banana", the bot obeys, and the bid fails the check if the word is missing.
+- **Prices each project:** based on budget, the average bid, your floor and your review count. It handles non-USD currencies.
+- **Smart about your first jobs:** small budgets and new clients score higher while you have 0 reviews.
+
+## Layout
+| Path | What |
+|---|---|
+| `bidsmith/freelancer.py` | Official REST client (search, bid, self) |
+| `bidsmith/filters.py`, `scoring.py`, `retrieval.py`, `pricing.py` | Filter → score → portfolio RAG → price |
+| `bidsmith/proposal.py`, `quality.py`, `llm.py` | Writer (Gemini, OpenAI or Claude), quality gate, template fallback |
+| `bidsmith/notify.py`, `web.py`, `app.py` | WhatsApp Cloud API, dashboard and webhook, actions and commands |
+| `profile/owner_profile.yaml` | **Your** facts, portfolio, rates and search settings |
+
+## Docs
+- [00: Agent operating prompt](docs/00-AGENT-PROMPT.md)
+- [01: Market research, 60 systems](docs/01-market-research.md)
+- [02: Analysis and requirements](docs/02-analysis-and-requirements.md)
+- [03: Your profile audit and rewrite](docs/03-profile-audit-and-rewrite.md)
+- [04: Setup guide](docs/04-setup.md)
+- [05: **Profile copy-paste pack**](docs/05-PROFILE-COPY-PASTE.md)
+- [06: **Portfolio items**, form-ready](docs/06-PORTFOLIO-ITEMS.md) + 17 images in `profile/images/` (regenerate with `python tools/make_profile_images.py`)
