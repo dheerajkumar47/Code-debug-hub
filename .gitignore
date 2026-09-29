@@ -1,1 +1,5 @@
-node_modules
+.env
+*.env
+__pycache__/
+*.db
+node_modules/
