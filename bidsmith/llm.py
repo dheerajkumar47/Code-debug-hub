@@ -34,6 +34,29 @@ class LLM:
     def enabled(self) -> bool:
         return self.provider in DEFAULT_MODELS and bool(self.api_key)
 
+    def ping(self) -> str:
+        """Quick start-up check, no retries: 'ok', 'busy', or the error text."""
+        saved = self._sleep
+        self._sleep = lambda s: None
+        try:
+            if self.provider == "gemini":
+                body = {"contents": [{"role": "user", "parts": [{"text": "Say OK"}]}],
+                        "generationConfig": {"maxOutputTokens": 2100}}
+                r = self._http.post(f"{self._gemini_base()}/models/{self.model}:generateContent",
+                                    headers={"x-goog-api-key": self.api_key}, json=body)
+                if r.status_code in (429, 500, 502, 503, 504):
+                    return "busy"
+                if r.status_code == 404:  # retired name: let the normal path pick a live model
+                    self.complete("Reply with one word.", "Say OK", max_tokens=50)
+                    return "ok"
+                return "ok" if r.status_code < 400 else f"HTTP {r.status_code}: {r.text[:200]}"
+            self.complete("Reply with one word.", "Say OK", max_tokens=50)
+            return "ok"
+        except LLMError as e:
+            return "busy" if any(c in str(e) for c in (" 503", " 429", " 500")) else str(e)
+        finally:
+            self._sleep = saved
+
     def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.6) -> str:
         if not self.enabled:
             raise LLMError("LLM not configured")

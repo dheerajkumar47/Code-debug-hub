@@ -68,13 +68,16 @@ padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;ma
 </style></head><body><div class="wrap">
 <header><div class="brand">Bid<span>Smith</span></div>
 <div class="bar"><span class="pill"><span id="dot" class="dot"></span><span id="status">Connecting…</span></span>
-<span class="pill">Applied today <b id="applied">0</b></span>
+<span class="pill">Checked today <b id="checked">0</b></span>
+<span class="pill">Matched <b id="matched">0</b></span>
+<span class="pill">Applied <b id="applied">0</b></span>
 <button id="pause" class="ghost" title="Pause or resume searching">Pause</button></div></header>
 <div id="notice"></div>
 <div id="cards"></div>
 <div id="empty" class="empty" style="display:none"><div class="radar"></div>
 <div style="font-weight:600;color:var(--ink);margin-bottom:4px">Watching Freelancer for projects that match you</div>
-<div>New matches appear here automatically, within seconds. Keep this page open.</div></div>
+<div>New matches appear here automatically, within seconds. Keep this page open.</div>
+<div id="counts" style="margin-top:14px;font-size:13px"></div></div>
 <div class="applied" id="appliedBox" style="display:none"><h3>Recently applied</h3><ul id="appliedList"></ul></div>
 </div><div id="toast" class="toast"></div>
 <script>
@@ -129,6 +132,8 @@ async function apply(id,el){const b=el.querySelector('[data-a=apply]');b.disable
  catch(e){toast("Could not apply: "+e.message);b.disabled=false;b.textContent="Apply"}}
 async function act(id,what,el,remove){try{const r=await api(`/api/cards/${id}/${what}`,{});toast(r.message);if(remove)removeCard(id)}catch(e){toast(e.message)}}
 function render(st){autoBid=st.auto_bid;live=st.live;$("#applied").textContent=st.applied_today;
+ $("#checked").textContent=st.checked_today;$("#matched").textContent=st.matched_today;
+ $("#counts").textContent=st.checked_today?`${st.checked_today} new projects checked today · ${st.matched_today} matched your skills`:"";
  $("#dot").className="dot"+(live?"":" off");$("#pause").textContent=live?"Pause":"Resume";
  $("#status").textContent=!live?"Paused":st.checked_s==null?"Starting…":`Live · checked ${st.checked_s<5?"just now":st.checked_s+"s ago"}`;
  $("#notice").innerHTML=autoBid?"":`<div class="notice"><b>Copy &amp; paste mode.</b> Freelancer did not accept your token for bidding, so Apply copies the proposal and opens the project for you to paste. Everything else is automatic.</div>`;

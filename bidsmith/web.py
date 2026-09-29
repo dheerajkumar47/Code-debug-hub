@@ -25,12 +25,25 @@ def create_app(bot: BidSmith, run_loop: bool = True) -> FastAPI:
     s = bot.s
 
     async def poll_loop():
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
+        try:
+            st = await asyncio.to_thread(bot.recheck_recent)
+            if st.get("pending"):
+                log.info("Found %s matching project(s) from the last few hours", st["pending"])
+        except Exception as e:
+            log.exception("start-up re-check failed: %s", e)
+        beat = 0.0
         while True:
             try:
                 stats = await asyncio.to_thread(bot.run_live)
-                if stats.get("pending") or stats.get("expired"):
-                    log.info("live: %s", stats)
+                if stats.get("pending"):
+                    log.info("🔔 %s new matching project(s) — check your dashboard", stats["pending"])
+                if stats.get("expired"):
+                    log.info("Removed %s card(s): passed the bid limit or closed", stats["expired"])
+                if time.time() - beat > 120:  # heartbeat every 2 minutes
+                    beat = time.time()
+                    log.info("Live · %s new projects checked today · %s matched you",
+                             bot.today("checked"), bot.today("matched"))
             except Exception as e:
                 log.exception("live cycle failed: %s", e)
             await asyncio.sleep(s.live_poll_seconds + random.uniform(-2, 2))

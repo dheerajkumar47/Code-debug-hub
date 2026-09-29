@@ -36,17 +36,16 @@ def run_check(s: Settings) -> int:
 
     # 3) AI writer.
     if bot.llm and bot.llm.enabled:
-        try:
-            bot.llm.complete("Reply with one word.", "Say OK", max_tokens=50)
+        res = bot.llm.ping()
+        if res == "ok":
             bot.remember_model()
             print(f"✅ AI writer works ({s.llm_provider} · model {bot.llm.model})")
-        except Exception as e:
-            err = str(e)
-            if any(c in err for c in (" 503", " 429", "high demand", "UNAVAILABLE", "RESOURCE_EXHAUSTED")):
-                print(f"🟡 AI key accepted but {s.llm_provider} is busy right now — the bot retries automatically.")
-            else:
-                print(f"🟡 AI writer not working ({err[:160]}; key {mask(s.llm_api_key)})\n"
-                      f"   Drafts use the built-in template until it works. Fix: new key in keys.txt, then start.bat.")
+        elif res == "busy":
+            print(f"🟡 AI key accepted; {s.llm_provider} is busy right now. Proposals start from the ready draft"
+                  f" and the AI polishes them when it is free.")
+        else:
+            print(f"🟡 AI writer not working ({res[:160]}; key {mask(s.llm_api_key)})\n"
+                  f"   Drafts use the built-in template until it works. Fix: new key in keys.txt, then start.bat.")
     else:
         print("🟡 No AI key → drafts use the built-in template.")
 
@@ -78,7 +77,9 @@ def main(argv: list[str] | None = None) -> int:
         run(a.env)
         return 0
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
+    for noisy in ("httpx", "httpcore", "uvicorn.access"):  # keep the black window readable
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     s = Settings.load(a.env)
 
     if a.cmd == "check":

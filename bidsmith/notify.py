@@ -52,7 +52,7 @@ class ConsoleNotifier:
     name = "console"
 
     def send_card(self, card: Card) -> None:
-        log.info("NEW BID CARD #%s\n%s\n---\n%s", card.project_id, card.summary(), card.proposal)
+        log.info("🔔 New match: %s · %s · %s", card.title[:70], card.price_line, card.url)
 
     def send_text(self, text: str) -> None:
         log.info("NOTIFY: %s", text)

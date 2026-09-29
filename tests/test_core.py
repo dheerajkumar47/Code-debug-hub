@@ -90,3 +90,16 @@ def test_freelancer_skill_names_match_profile(profile):
     r = heuristic_score(_real_style_project(), profile, PortfolioIndex(profile.portfolio), NOW)
     assert "5/5" in r.reasons[0], r.reasons
     assert r.score >= 75, r
+
+
+def test_real_world_chatbot_project_with_extra_tags_still_matches(profile):
+    from bidsmith.models import Client
+    p = _real_style_project(title="AI chatbot for my website",
+                            description="Need a chatbot on our website that answers customer questions.",
+                            skills=["PHP", "JavaScript", "AI Chatbot", "Python", "Website Design"],
+                            budget_min=30, budget_max=250, bid_count=5, client=Client())
+    r = heuristic_score(p, profile, PortfolioIndex(profile.portfolio), NOW)
+    assert r.score >= 60, r
+    off = _real_style_project(title="Logo and brand kit", description="Modern logo for a bakery.",
+                              skills=["Logo Design", "Graphic Design", "Illustrator"], bid_count=5)
+    assert heuristic_score(off, profile, PortfolioIndex(profile.portfolio), NOW).score < 40

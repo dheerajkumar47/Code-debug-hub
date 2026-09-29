@@ -204,8 +204,34 @@ class BidSmith:
                 log.error("keyword search failed: %s", e)
         stats = self.process(list(found.values()), now)
         stats["expired"] = self.refresh_open_cards()
+        stats["scanned"] = len(found)
+        self._count_today("checked", stats["new"])
+        self._count_today("matched", stats["pending"])
         self.store.kv_set("last_poll", str(now))
         self.remember_model()
+        return stats
+
+    def _count_today(self, name: str, n: int) -> int:
+        """Per-day counters shown on the dashboard (reset at midnight, local time)."""
+        key = f"{name}:{time.strftime('%Y-%m-%d')}"
+        total = int(self.store.kv_get(key) or 0) + int(n)
+        self.store.kv_set(key, str(total))
+        return total
+
+    def today(self, name: str) -> int:
+        return int(self.store.kv_get(f"{name}:{time.strftime('%Y-%m-%d')}") or 0)
+
+    def recheck_recent(self) -> dict:
+        """On start-up: give projects from the last few hours a fresh look with the current rules."""
+        max_age = float(self.profile.search.get("max_age_hours", 6) or 6) * 3600
+        now = time.time()
+        recent = []
+        for r in self.store.list_projects(("filtered", "low_score"), 2000):
+            p = self.store.project_obj(r["id"])
+            if p and p.time_submitted and now - p.time_submitted <= max_age:
+                recent.append(p)
+        stats = self.process(recent, now, recheck=True) if recent else {"pending": 0}
+        self._count_today("matched", stats.get("pending", 0))
         return stats
 
     def refresh_open_cards(self) -> int:
@@ -278,6 +304,7 @@ class BidSmith:
             "every_s": self.s.live_poll_seconds, "applied_today": self.store.bids_since(now - 86400),
             "max_bids": int(self.profile.search.get("max_bid_count", 50)),
             "cards": cards, "applied": applied,
+            "checked_today": self.today("checked"), "matched_today": self.today("matched"),
         }
 
     def apply(self, pid: int, text: str | None = None, amount: float | None = None,
@@ -297,7 +324,9 @@ class BidSmith:
     def threshold(self) -> int:
         """Minimum score for a card. Set from the dashboard (saved), else from .env."""
         v = self.store.kv_get("score_threshold")
-        return int(v) if v and v.isdigit() else self.s.score_threshold
+        if v and v.isdigit():
+            return int(v)
+        return self.s.live_min_score if self.s.background_drafts else self.s.score_threshold
 
     def set_threshold(self, value: int) -> str:
         value = max(30, min(95, int(value)))

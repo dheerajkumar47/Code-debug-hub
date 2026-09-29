@@ -71,6 +71,7 @@ class Settings:
     notify_channels: list[str] = field(default_factory=lambda: ["web", "console"])
     poll_interval_seconds: int = 180
     live_poll_seconds: int = 15      # how often to look for just-posted projects
+    live_min_score: int = 60         # minimum fit for a card on the live dashboard
     lookback_minutes: int = 60       # on start-up, how far back to look
     background_drafts: bool = False  # server mode: show the card at once, AI polishes the proposal after
     score_threshold: int = 70
@@ -112,6 +113,7 @@ class Settings:
             notify_channels=channels,
             poll_interval_seconds=_int(e("POLL_INTERVAL_SECONDS"), 180),
             live_poll_seconds=max(10, _int(e("LIVE_POLL_SECONDS"), 15)),
+            live_min_score=_int(e("LIVE_MIN_SCORE"), 60),
             lookback_minutes=_int(e("LOOKBACK_MINUTES"), 60),
             score_threshold=_int(e("SCORE_THRESHOLD"), 70),
             auto_submit=_bool(e("AUTO_SUBMIT"), False),

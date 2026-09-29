@@ -60,7 +60,8 @@ def _skill_score(p: Project, profile: Profile) -> tuple[float, list[str]]:
     # Keyword hits in text for skills the project didn't tag.
     text_toks = set(tokenize(p.text))
     kw_hits = [s for s in profile.skills_primary if set(tokenize(s)) and set(tokenize(s)) <= text_toks]
-    score = 22 * ratio + min(len(prim_hits), 3) * 3 + min(len(kw_hits), 4) * 1.5
+    # What matters is how many of YOUR skills the project needs, not how many other skills it also lists.
+    score = min(len(hits), 3) * 7 + 8 * ratio + min(len(prim_hits), 2) * 1.5 + min(len(kw_hits), 4) * 1.5
     reasons = []
     if hits:
         reasons.append(f"skills match {len(hits)}/{len(tags)}: {', '.join(hits[:5])}")
