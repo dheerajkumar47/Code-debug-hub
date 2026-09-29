@@ -7,6 +7,8 @@ import re
 import secrets
 from pathlib import Path
 
+from .config import clean_secret, mask
+
 REQUIRED = [
     # key, prompt, secret, default
     ("FREELANCER_OAUTH_TOKEN", "1/2  Freelancer token (Generate Token button)", True, ""),
@@ -47,7 +49,16 @@ def _current(lines: list[str], key: str) -> str:
 def _ask_field(lines, key, prompt, secret, default, ask, ask_secret) -> list[str]:
     cur = _current(lines, key)
     shown = ("set" if cur else "empty") if secret else (cur or default or "empty")
-    val = (ask_secret if secret else ask)(f"{prompt} [{shown}]: ").strip()
+    raw = (ask_secret if secret else ask)(f"{prompt} [{shown}]: ")
+    val = raw
+    if secret:
+        val = clean_secret(raw)
+        if raw.strip() and len(val) < 20:  # something was pasted but it is not a real key
+            print(f"   ⚠ Only {len(val)} characters arrived — the paste did not work.")
+            val = clean_secret(ask("   Paste again (visible this time), then Enter: "))
+        if val:
+            print(f"   ✔ received {mask(val)}")
+    val = val.strip()
     if not val:
         val = cur or default
     if key == "OWNER_WHATSAPP":

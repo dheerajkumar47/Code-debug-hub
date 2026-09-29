@@ -8,7 +8,7 @@ import sys
 import time
 
 from .app import BidSmith
-from .config import Settings
+from .config import Settings, mask
 from .freelancer import parse_project
 
 
@@ -31,12 +31,17 @@ def run_check(s: Settings) -> int:
             line(True, f"Project search works ({len(found)} live 'chatbot' projects returned)")
         except Exception as e:
             line(False, f"Freelancer API error: {e}")
+            print(f"   Token in .env: {mask(s.freelancer_token)}. A real token is usually 20+ characters.")
+            if "401" in str(e):
+                print("   → The token was not accepted. Generate a NEW token, then double-click setup.bat"
+                      " and paste it with RIGHT-CLICK (Ctrl+V does not work in hidden input).")
     if bot.llm and bot.llm.enabled:
         try:
-            reply = bot.llm.complete("Reply with one word.", "Say OK", max_tokens=20)
-            line(True, f"AI writer works ({s.llm_provider}: {reply[:20]!r})")
+            bot.llm.complete("Reply with one word.", "Say OK", max_tokens=50)
+            line(True, f"AI writer works ({s.llm_provider} · model {bot.llm.model})")
         except Exception as e:
-            line(False, f"AI key error ({s.llm_provider}): {e}")
+            line(False, f"AI key error ({s.llm_provider}): {str(e)[:300]}")
+            print(f"   Key in .env: {mask(s.llm_api_key)}. Gemini keys start with 'AIza' and are 39 characters.")
     else:
         print("⚠️  No AI key → drafts use the simple template (works, but add a free Gemini key for best bids)")
     if "whatsapp" in s.notify_channels:

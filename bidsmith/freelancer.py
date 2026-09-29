@@ -31,7 +31,8 @@ class FreelancerClient:
         self.site_url = site_url.rstrip("/")
         self._http = httpx.Client(
             base_url=api_url.rstrip("/"),
-            headers={"Freelancer-OAuth-V1": token, "User-Agent": "BidSmith/0.1 (personal)"},
+            headers={"Freelancer-OAuth-V1": token, "Authorization": f"Bearer {token}",
+                     "User-Agent": "BidSmith/0.1 (personal)"},
             timeout=timeout,
             transport=transport,
         )

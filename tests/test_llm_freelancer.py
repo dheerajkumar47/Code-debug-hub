@@ -56,3 +56,39 @@ def test_freelancer_client_search_and_bid():
     body = json.loads(calls[-1].content)
     assert body == {"project_id": 1, "bidder_id": 42, "amount": 250.0, "period": 7,
                     "milestone_percentage": 50, "description": "text"}
+
+
+def test_gemini_switches_when_model_retired():
+    """Reproduces the real error: default model 404s and Google suggests a replacement."""
+    urls = []
+
+    def handler(req: httpx.Request):
+        urls.append(req.url.path)
+        if "gemini-flash-latest" in req.url.path or "gemini-2.5-flash" in req.url.path:
+            return httpx.Response(404, json={"error": {"code": 404, "message":
+                "This model models/gemini-2.5-flash is no longer available to new users. Please update your "
+                "code to use models/gemini-3.8-flash for the latest features and improvements."}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [
+            {"text": "thinking...", "thought": True}, {"text": "OK"}]}}]})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    assert llm.complete("s", "u") == "OK"          # thought parts are dropped
+    assert llm.model == "gemini-3.8-flash"
+    assert urls[-1].endswith("gemini-3.8-flash:generateContent")
+
+
+def test_gemini_discovers_model_from_list():
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": [
+                {"name": "models/gemini-3.1-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash-lite", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-4.0-flash-preview", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/text-embedding-9", "supportedGenerationMethods": ["embedContent"]}]})
+        if "gemini-3.8-flash:" in req.url.path:
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
+        return httpx.Response(404, json={"error": {"message": "not found"}})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    assert llm.complete("s", "u") == "OK" and llm.model == "gemini-3.8-flash"

@@ -67,7 +67,7 @@ You will paste both into **one place** (Part 5). You never open or edit any code
 
 | The window shows | You do |
 |---|---|
-| `1/2  Freelancer token (Generate Token button) [empty]:` | Copy the Freelancer token from Notepad. In the black window, **right-click** to paste (**nothing will appear; that's normal, it's hidden**). Press **Enter**. |
+| `1/2  Freelancer token (Generate Token button) [empty]:` | Copy the Freelancer token from Notepad. In the black window, **right-click** to paste (**not Ctrl+V**; nothing will appear, that's normal). Press **Enter**. It should say `✔ received 40 chars (abcd…wxyz)` or similar. |
 | `AI provider: gemini / openai / anthropic / none [gemini]:` | Just press **Enter** |
 | `2/2  AI API key (...) [empty]:` | Copy the Gemini key from Notepad. **Right-click** to paste (hidden again). Press **Enter**. |
 | `Set up WhatsApp now? You can do it later. (y/N):` | Just press **Enter** (skip for now) |
@@ -122,8 +122,5 @@ The first cards appear within a few minutes, once good projects are found.
 ## PART 8: Next day and later
 - **To start:** double-click **`start.bat`**. It won't ask for the keys again.
 - **To stop:** close the black window.
-- **To change or add a key:**
-  1. In the bot folder, click the address bar, type `cmd` and press **Enter**.
-  2. Type `.venv\Scripts\activate` and press **Enter**.
-  3. Type `python -m bidsmith setup` and press **Enter**. Paste the new key; press **Enter** to keep the old ones.
+- **To change or add a key:** double-click **`setup.bat`**. Paste with **right-click**, then press **Enter** to keep the old values.
 - **WhatsApp buttons (later, optional):** tell me when you have 30 minutes, and I'll walk you through it one step at a time.

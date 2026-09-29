@@ -16,6 +16,18 @@ def _bool(v: str | None, default: bool = False) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def clean_secret(v: str | None) -> str:
+    """Remove what copy-paste often adds: spaces, quotes, 'Bearer ', control characters."""
+    v = "".join(ch for ch in (v or "") if ch.isprintable()).strip().strip("\"'").strip()
+    if v.lower().startswith("bearer "):
+        v = v[7:].strip()
+    return v
+
+
+def mask(v: str) -> str:
+    return f"{len(v)} chars ({v[:4]}…{v[-4:]})" if len(v) >= 12 else f"{len(v)} chars"
+
+
 def _int(v: str | None, default: int) -> int:
     try:
         return int(v) if v not in (None, "") else default
@@ -72,15 +84,15 @@ class Settings:
         e = os.environ.get
         channels = [c.strip() for c in e("NOTIFY_CHANNELS", "web,console").split(",") if c.strip()]
         return cls(
-            freelancer_token=e("FREELANCER_OAUTH_TOKEN", ""),
+            freelancer_token=clean_secret(e("FREELANCER_OAUTH_TOKEN", "")),
             freelancer_api_url=e("FREELANCER_API_URL", cls.freelancer_api_url).rstrip("/"),
             freelancer_site_url=e("FREELANCER_SITE_URL", cls.freelancer_site_url).rstrip("/"),
             llm_provider=e("LLM_PROVIDER", "none").lower(),
-            llm_api_key=e("LLM_API_KEY", ""),
+            llm_api_key=clean_secret(e("LLM_API_KEY", "")),
             llm_model=e("LLM_MODEL", ""),
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_score_enabled=_bool(e("LLM_SCORE_ENABLED"), False),
-            whatsapp_token=e("WHATSAPP_TOKEN", ""),
+            whatsapp_token=clean_secret(e("WHATSAPP_TOKEN", "")),
             whatsapp_phone_number_id=e("WHATSAPP_PHONE_NUMBER_ID", ""),
             whatsapp_verify_token=e("WHATSAPP_VERIFY_TOKEN", ""),
             whatsapp_app_secret=e("WHATSAPP_APP_SECRET", ""),
