@@ -92,3 +92,23 @@ def test_gemini_discovers_model_from_list():
 
     llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
     assert llm.complete("s", "u") == "OK" and llm.model == "gemini-3.8-flash"
+
+
+def test_gemini_busy_retries_then_switches_model():
+    calls = []
+
+    def handler(req: httpx.Request):
+        calls.append(req.url.path)
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"models": [
+                {"name": "models/gemini-flash-latest", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash-lite", "supportedGenerationMethods": ["generateContent"]}]})
+        if "flash-latest" in req.url.path:
+            return httpx.Response(503, json={"error": {"code": 503, "message": "high demand"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
+
+    llm = LLM("gemini", "KEY", transport=httpx.MockTransport(handler))
+    llm._sleep = lambda s: None
+    assert llm.complete("s", "u") == "OK"
+    assert llm.model == "gemini-3.8-flash-lite"
+    assert sum("flash-latest:" in c for c in calls) == 3  # retried before switching

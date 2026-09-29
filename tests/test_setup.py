@@ -44,3 +44,20 @@ def test_failed_hidden_paste_falls_back_to_visible(tmp_path, monkeypatch):
 def test_clean_secret():
     assert clean_secret(' "Bearer abc123" \r\n') == "abc123"
     assert clean_secret("\x16") == ""
+
+
+def test_keys_file_import_and_delete(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "keys.txt").write_text(
+        "﻿FREELANCER: " + FL + "\r\nGEMINI: AQ.Ab8RN6Kabcdefghijklmnopqrstuvwxyz0123456789-5TCw\r\n", encoding="utf-8")
+    text = run(".env", ask=lambda _: "", ask_secret=lambda _: "").read_text()
+    assert f"FREELANCER_OAUTH_TOKEN={FL}\n" in text
+    assert "LLM_API_KEY=AQ.Ab8RN6Kabcdefghijklmnopqrstuvwxyz0123456789-5TCw\n" in text
+    assert "LLM_PROVIDER=gemini" in text
+    assert not (tmp_path / "keys.txt").exists()
+
+
+def test_keys_file_unlabeled_lines(tmp_path, monkeypatch):
+    from bidsmith.setup_wizard import parse_keys_file
+    out = parse_keys_file(f"{FL}\n\n{AI}\n")
+    assert out == {"FREELANCER_OAUTH_TOKEN": FL, "LLM_PROVIDER": "gemini", "LLM_API_KEY": AI}

@@ -31,17 +31,20 @@ def run_check(s: Settings) -> int:
             line(True, f"Project search works ({len(found)} live 'chatbot' projects returned)")
         except Exception as e:
             line(False, f"Freelancer API error: {e}")
-            print(f"   Token in .env: {mask(s.freelancer_token)}. A real token is usually 20+ characters.")
+            print(f"   Token in .env: {mask(s.freelancer_token)}")
             if "401" in str(e):
-                print("   → The token was not accepted. Generate a NEW token, then double-click setup.bat"
-                      " and paste it with RIGHT-CLICK (Ctrl+V does not work in hidden input).")
+                print("   → Not accepted. Generate a NEW token, put it in keys.txt (see docs/08), then run setup.bat.")
     if bot.llm and bot.llm.enabled:
         try:
             bot.llm.complete("Reply with one word.", "Say OK", max_tokens=50)
             line(True, f"AI writer works ({s.llm_provider} · model {bot.llm.model})")
         except Exception as e:
-            line(False, f"AI key error ({s.llm_provider}): {str(e)[:300]}")
-            print(f"   Key in .env: {mask(s.llm_api_key)}. Gemini keys start with 'AIza' and are 39 characters.")
+            err = str(e)
+            if any(c in err for c in (" 503", " 429", "high demand", "UNAVAILABLE", "RESOURCE_EXHAUSTED")):
+                print(f"⚠️  AI key accepted, but {s.llm_provider} is busy right now — the bot retries automatically.")
+            else:
+                line(False, f"AI key error ({s.llm_provider}): {err[:300]}")
+                print(f"   Key in .env: {mask(s.llm_api_key)}")
     else:
         print("⚠️  No AI key → drafts use the simple template (works, but add a free Gemini key for best bids)")
     if "whatsapp" in s.notify_channels:

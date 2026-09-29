@@ -8,8 +8,7 @@ if not exist .venv (
 )
 call .venv\Scripts\activate.bat
 echo.
-echo TIP: paste with RIGHT-CLICK. Ctrl+V does not work in hidden input.
-echo      Nothing appears while you paste - that is normal.
+echo TIP: easiest is keys.txt in this folder (see docs\08-STEP-BY-STEP.md).
 echo.
 python -m bidsmith setup
 python -m bidsmith check

@@ -1,7 +1,12 @@
-"""Interactive setup: asks for secrets (hidden input) and writes .env with owner-only permissions."""
+"""Setup: reads your keys from keys.txt (easiest) or asks for them, then writes .env.
+
+keys.txt (in the bot folder, made with Notepad), for example:
+    FREELANCER: <your freelancer token>
+    GEMINI: <your gemini key>
+It is deleted after import so the keys only live in .env.
+"""
 from __future__ import annotations
 
-import getpass
 import os
 import re
 import secrets
@@ -46,6 +51,44 @@ def _current(lines: list[str], key: str) -> str:
     return ""
 
 
+KEY_FILES = ("keys.txt", "keys.txt.txt", "keys")
+_PROVIDER_LABELS = {"gemini": "gemini", "google": "gemini", "openai": "openai", "gpt": "openai",
+                    "claude": "anthropic", "anthropic": "anthropic"}
+
+
+def find_keys_file(folder: Path = Path(".")) -> Path | None:
+    return next((folder / n for n in KEY_FILES if (folder / n).is_file()), None)
+
+
+def parse_keys_file(text: str) -> dict[str, str]:
+    """Lenient: 'FREELANCER: xxx', 'freelancer=xxx', 'GEMINI: xxx' or just two lines (token, then AI key)."""
+    out: dict[str, str] = {}
+    unlabeled = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(r"^([A-Za-z_ ]{2,30}?)\s*[:=]\s*(\S.*)$", line)
+        label = m.group(1).strip().lower() if m else ""
+        known = label and ("freelancer" in label or label in ("token", "fl") or
+                           any(k in label for k in _PROVIDER_LABELS))
+        if not known:
+            m, label = None, ""
+        value = clean_secret(m.group(2)) if m else clean_secret(line)
+        if "freelancer" in label or label in ("token", "fl"):
+            out["FREELANCER_OAUTH_TOKEN"] = value
+        elif any(k in label for k in _PROVIDER_LABELS):
+            prov = next(v for k, v in _PROVIDER_LABELS.items() if k in label)
+            out["LLM_PROVIDER"], out["LLM_API_KEY"] = prov, value
+        elif value:
+            unlabeled.append(value)
+    if "FREELANCER_OAUTH_TOKEN" not in out and unlabeled:
+        out["FREELANCER_OAUTH_TOKEN"] = unlabeled.pop(0)
+    if "LLM_API_KEY" not in out and unlabeled:
+        out["LLM_PROVIDER"], out["LLM_API_KEY"] = "gemini", unlabeled.pop(0)
+    return out
+
+
 def _ask_field(lines, key, prompt, secret, default, ask, ask_secret) -> list[str]:
     cur = _current(lines, key)
     shown = ("set" if cur else "empty") if secret else (cur or default or "empty")
@@ -55,7 +98,7 @@ def _ask_field(lines, key, prompt, secret, default, ask, ask_secret) -> list[str
         val = clean_secret(raw)
         if raw.strip() and len(val) < 20:  # something was pasted but it is not a real key
             print(f"   ⚠ Only {len(val)} characters arrived — the paste did not work.")
-            val = clean_secret(ask("   Paste again (visible this time), then Enter: "))
+            val = clean_secret(ask("   Paste again, then Enter: "))
         if val:
             print(f"   ✔ received {mask(val)}")
     val = val.strip()
@@ -66,15 +109,30 @@ def _ask_field(lines, key, prompt, secret, default, ask, ask_secret) -> list[str
     return _set(lines, key, val)
 
 
-def run(env_path: str = ".env", ask=input, ask_secret=getpass.getpass) -> Path:
+def run(env_path: str = ".env", ask=input, ask_secret=input) -> Path:
     path = Path(env_path)
     lines = _read_env(path)
     print(f"Writing {path.resolve()} (this file stays on your computer; it is git-ignored).")
-    print("Secrets are hidden while you type/paste. Press Enter to keep the current value.\n")
     channels = ["web", "console"]
-    for key, prompt, secret, default in REQUIRED:
-        lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
-    if ask("\nSet up WhatsApp now? You can do it later. (y/N): ").strip().lower().startswith("y"):
+    keys_file = find_keys_file(path.parent)
+    if keys_file:
+        found = parse_keys_file(keys_file.read_text(encoding="utf-8-sig", errors="ignore"))
+        for k, v in found.items():
+            lines = _set(lines, k, v)
+        print(f"Read {keys_file.name}:")
+        if "FREELANCER_OAUTH_TOKEN" in found:
+            print(f"   ✔ Freelancer token  {mask(found['FREELANCER_OAUTH_TOKEN'])}")
+        if "LLM_API_KEY" in found:
+            print(f"   ✔ {found['LLM_PROVIDER']} key  {mask(found['LLM_API_KEY'])}")
+        missing = [k for k in ("FREELANCER_OAUTH_TOKEN", "LLM_API_KEY") if k not in found]
+        for key, prompt, secret, default in REQUIRED:
+            if key in missing or (key == "LLM_PROVIDER" and "LLM_API_KEY" in missing):
+                lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
+    else:
+        print("Paste each key and press Enter (right-click or Ctrl+V). Enter alone keeps the current value.\n")
+        for key, prompt, secret, default in REQUIRED:
+            lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
+    if not keys_file and ask("\nSet up WhatsApp now? You can do it later. (y/N): ").strip().lower().startswith("y"):
         for key, prompt, secret, default in WHATSAPP:
             lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)
     if _current(lines, "WHATSAPP_TOKEN") and _current(lines, "WHATSAPP_PHONE_NUMBER_ID"):
@@ -91,5 +149,11 @@ def run(env_path: str = ".env", ask=input, ask_secret=getpass.getpass) -> Path:
         os.chmod(path, 0o600)
     except OSError:
         pass  # Windows
-    print(f"\nSaved. Next: python -m bidsmith check")
+    if keys_file:
+        try:
+            keys_file.unlink()
+            print(f"   ({keys_file.name} deleted — your keys are now only in .env)")
+        except OSError:
+            print(f"   Please delete {keys_file.name} yourself — your keys are now in .env")
+    print("\nSaved. Next: python -m bidsmith check")
     return path

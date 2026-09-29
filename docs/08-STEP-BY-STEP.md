@@ -4,7 +4,7 @@ You need **2 keys**:
 1. **Freelancer token**, so the bot can see projects and place bids for you.
 2. **Gemini API key**, so the bot can write proposals with AI. It's free.
 
-You will paste both into **one place** (Part 5). You never open or edit any code file.
+You put both into **one Notepad file** called `keys.txt` (Part 5). You never open or edit any code file.
 
 ---
 
@@ -53,50 +53,53 @@ You will paste both into **one place** (Part 5). You never open or edit any code
 5. You should see `start.bat`, `bidsmith`, `docs`, `profile`, `requirements.txt` and more.
    - Tip: move this folder to your **Desktop** so it's easy to find.
 
-## PART 5: First start and pasting the keys (5 min)
-1. In that folder, **double-click `start.bat`**.
-   - If Windows shows **"Windows protected your PC"**, click **More info** → **Run anyway**.
-2. A black window opens. The **first time** it installs the libraries by itself (1–2 minutes). You don't need to do anything:
+## PART 5: Put your keys in a file, then start (5 min)
+**A. Make the keys file**
+1. Open **Notepad**, then **File → New**.
+2. Type exactly these two lines, pasting your keys after the colons (Ctrl+V works fine in Notepad):
+   ```
+   FREELANCER: paste-your-freelancer-token-here
+   GEMINI: paste-your-gemini-key-here
+   ```
+   - The Freelancer token goes all on **one line**. Don't add spaces inside it.
+3. Click **File → Save As**:
+   - Folder: the bot folder (the one with `start.bat`).
+   - File name: `keys.txt`
+   - Save as type: **Text Documents (*.txt)**
+   - Click **Save**.
+
+**B. Start**
+1. Double-click **`start.bat`**. If Windows shows a blue warning: **More info → Run anyway**.
+2. The first time, it installs the libraries by itself (1–2 minutes):
    - `httpx`: talks to Freelancer and Gemini
-   - `fastapi` + `uvicorn` + `python-multipart`: run the dashboard web page
-   - `PyYAML`: reads your profile file
-   - `python-dotenv`: reads your keys file
-   - `pillow`: makes the portfolio images
-   - `pytest`: the self-tests
-3. Then it asks you questions, one at a time:
-
-| The window shows | You do |
-|---|---|
-| `1/2  Freelancer token (Generate Token button) [empty]:` | Copy the Freelancer token from Notepad. In the black window, **right-click** to paste (**not Ctrl+V**; nothing will appear, that's normal). Press **Enter**. It should say `✔ received 40 chars (abcd…wxyz)` or similar. |
-| `AI provider: gemini / openai / anthropic / none [gemini]:` | Just press **Enter** |
-| `2/2  AI API key (...) [empty]:` | Copy the Gemini key from Notepad. **Right-click** to paste (hidden again). Press **Enter**. |
-| `Set up WhatsApp now? You can do it later. (y/N):` | Just press **Enter** (skip for now) |
-
-4. It prints a line like:
+   - `fastapi` + `uvicorn` + `python-multipart`: the dashboard web page
+   - `PyYAML`: your profile
+   - `python-dotenv`: your keys
+   - `pillow`: images
+   - `pytest`: self-tests
+3. It reads `keys.txt` and shows:
    ```
-   Dashboard login → user: owner  password: Ab3xY9kLmQ2w  (saved in .env)
+   Read keys.txt:
+      ✔ Freelancer token  32 chars (abcd…wxyz)
+      ✔ gemini key  53 chars (AQ.A…5TCw)
+      (keys.txt deleted — your keys are now only in .env)
+   Dashboard login → user: owner  password: xxxxxxxx
    ```
-   **Write this password in Notepad.**
-5. Your keys are now saved in a file called **`.env`** inside the bot folder.
-   - It stays only on your PC and is never uploaded.
-   - If you ever need to change a key, run setup again (Part 8). Don't edit `.env` by hand.
-6. The bot checks everything. You should see:
+   - The numbers can differ.
+   - **Write the password down.**
+   - `keys.txt` is deleted automatically, so your keys only stay in the hidden `.env` file.
+4. The bot checks everything:
    ```
    ✅ Freelancer token works (your user id 12345678)
-   ✅ Project search works (3 live 'chatbot' projects returned)
-   ✅ AI writer works (gemini: 'OK')
-   ℹ️  WhatsApp off → approve bids on the dashboard
-   ✅ Dashboard password set
-   Ready!
+   ✅ Project search works (…)
+   ✅ AI writer works (gemini · model …)
    ```
-   If you see ❌, take a screenshot and send it to me. **Blur any key first.**
-7. Then it starts and shows:
-   ```
-   Dashboard on this PC:     http://localhost:8000
-   Dashboard on your phone:  http://192.168.1.23:8000   (same Wi-Fi)
-   ```
-   - If Windows asks **"Allow Python on networks?"**, tick **Private networks** → **Allow**.
-8. **Leave the black window open.** Closing it stops the bot.
+   - `⚠️ AI key accepted, but gemini is busy`: that's fine. Google is busy, and the bot retries by itself.
+   - ❌ on any line: send me a screenshot, **hiding the keys**.
+5. If Windows asks **"Allow Python on networks?"**: tick **Private networks → Allow**.
+6. **Leave the black window open.** Closing it stops the bot.
+
+**To change a key later:** make a new `keys.txt` the same way (only the line you want to change is needed), then double-click `start.bat`.
 
 ## PART 6: Open the dashboard
 **On your PC:**
@@ -122,5 +125,5 @@ The first cards appear within a few minutes, once good projects are found.
 ## PART 8: Next day and later
 - **To start:** double-click **`start.bat`**. It won't ask for the keys again.
 - **To stop:** close the black window.
-- **To change or add a key:** double-click **`setup.bat`**. Paste with **right-click**, then press **Enter** to keep the old values.
+- **To change or add a key:** make a new `keys.txt` (Part 5A) and double-click `start.bat`.
 - **WhatsApp buttons (later, optional):** tell me when you have 30 minutes, and I'll walk you through it one step at a time.

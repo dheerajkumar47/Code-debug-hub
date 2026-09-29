@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 
 import httpx
 
@@ -27,6 +28,7 @@ class LLM:
         self.model = model or DEFAULT_MODELS.get(self.provider, "")
         self.base_url = base_url.rstrip("/")
         self._http = httpx.Client(timeout=timeout, transport=transport)
+        self._sleep = time.sleep
 
     @property
     def enabled(self) -> bool:
@@ -40,7 +42,13 @@ class LLM:
 
     # ------------------------------------------------------------------
     def _post(self, url: str, headers: dict, body: dict) -> dict:
-        r = self._http.post(url, headers=headers, json=body)
+        for wait in (2, 6, 0):  # retry briefly when the provider is busy
+            r = self._http.post(url, headers=headers, json=body)
+            if r.status_code in (429, 500, 502, 503, 504) and wait:
+                log.info("%s busy (HTTP %s), retrying in %ss", self.provider, r.status_code, wait)
+                self._sleep(wait)
+                continue
+            break
         if r.status_code >= 400:
             raise LLMError(f"{self.provider} HTTP {r.status_code}: {r.text[:600]}")
         return r.json()
@@ -48,7 +56,7 @@ class LLM:
     def _gemini_base(self) -> str:
         return self.base_url or "https://generativelanguage.googleapis.com/v1beta"
 
-    def _gemini_pick_model(self, error_text: str = "") -> str | None:
+    def _gemini_pick_model(self, error_text: str = "", exclude: str = "") -> str | None:
         """Find a working model: the one Google's error suggests, else the newest stable Flash model."""
         m = re.search(r"use (?:models/)?(gemini-[\w.\-]+)", error_text)
         if m:
@@ -62,13 +70,14 @@ class LLM:
             name = mdl.get("name", "").split("/")[-1]
             if "generateContent" not in mdl.get("supportedGenerationMethods", []):
                 continue
-            if "flash" not in name or any(x in name for x in ("lite", "image", "tts", "live", "audio", "exp")):
+            if "flash" not in name or name == exclude or \
+                    any(x in name for x in ("image", "tts", "live", "audio", "exp", "embedding")):
                 continue
             names.append(name)
 
         def rank(n: str):
             ver = [int(x) for x in re.findall(r"\d+", n.split("-flash")[0])] or [0]
-            return ("preview" not in n, ver, "latest" in n)
+            return ("preview" not in n, "lite" not in n, ver, "latest" in n)
         return max(names, key=rank) if names else None
 
     def _gemini(self, system, user, max_tokens, temperature):
@@ -83,14 +92,16 @@ class LLM:
                 data = self._post(url(), headers, body)
                 break
             except LLMError as e:
-                if " 404" not in str(e) or attempt == 2:
+                retired, busy = " 404" in str(e), any(c in str(e) for c in (" 503", " 429", " 500"))
+                if not (retired or busy) or attempt == 2:
                     raise
-                new = self._gemini_pick_model(str(e) if attempt == 0 else "")
+                new = self._gemini_pick_model(str(e) if retired else "", exclude=self.model)
                 if not new or new == self.model:
-                    new = self._gemini_pick_model("") if attempt == 0 else None
+                    new = self._gemini_pick_model("", exclude=self.model)
                 if not new or new == self.model:
                     raise
-                log.warning("Gemini model %s unavailable, switching to %s", self.model, new)
+                log.warning("Gemini model %s %s, switching to %s", self.model,
+                            "unavailable" if retired else "busy", new)
                 self.model = new
         parts = ((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))

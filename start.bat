@@ -18,9 +18,13 @@ call .venv\Scripts\activate.bat
 echo Installing requirements (first run only takes a minute)...
 python -m pip install -q --disable-pip-version-check -r requirements.txt
 
-if not exist .env (
+set NEEDSETUP=0
+if not exist .env set NEEDSETUP=1
+if exist keys.txt set NEEDSETUP=1
+if exist keys.txt.txt set NEEDSETUP=1
+if "%NEEDSETUP%"=="1" (
   echo.
-  echo === First-time setup: paste your 2 keys ===
+  echo === Setup: reading your keys ===
   python -m bidsmith setup
 )
 

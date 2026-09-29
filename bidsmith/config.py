@@ -18,10 +18,13 @@ def _bool(v: str | None, default: bool = False) -> bool:
 
 def clean_secret(v: str | None) -> str:
     """Remove what copy-paste often adds: spaces, quotes, 'Bearer ', control characters."""
-    v = "".join(ch for ch in (v or "") if ch.isprintable()).strip().strip("\"'").strip()
+    v = "".join(ch for ch in (v or "") if ch.isprintable() or ch.isspace()).strip().strip("\"'`").strip()
     if v.lower().startswith("bearer "):
         v = v[7:].strip()
-    return v
+    # A key never contains spaces: if other text came along with the paste, keep the longest piece.
+    if any(ch.isspace() for ch in v):
+        v = max(v.split(), key=len)
+    return v.strip("\"'`[](){}<>:;,")
 
 
 def mask(v: str) -> str:
