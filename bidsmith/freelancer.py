@@ -137,6 +137,23 @@ class FreelancerClient:
         users = result.get("users") or {}
         return [parse_project(p, users, self.site_url) for p in result.get("projects", [])]
 
+    def refresh(self, project_ids: Iterable[int]) -> dict[int, dict]:
+        """Current bid count and open/closed state for projects already on your dashboard."""
+        ids = list(project_ids)
+        out: dict[int, dict] = {}
+        for i in range(0, len(ids), 50):
+            params: list[tuple[str, Any]] = [("projects[]", p) for p in ids[i:i + 50]]
+            params += [("limit", 50), ("compact", "true")]
+            result = self._request("GET", "/projects/0.1/projects/", auth=False, params=params)
+            for p in result.get("projects", []):
+                status = str(p.get("status") or "active").lower()
+                front = str(p.get("frontend_project_status") or "open").lower()
+                out[int(p["id"])] = {
+                    "bid_count": int((p.get("bid_stats") or {}).get("bid_count") or 0),
+                    "open": status in ("active", "open") and front in ("open", "work_in_progress", "active"),
+                }
+        return out
+
     def place_bid(self, project_id: int, amount: float, period_days: int, description: str,
                   milestone_percentage: int = 50) -> dict:
         body = {

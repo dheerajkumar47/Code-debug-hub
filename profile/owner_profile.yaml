@@ -129,8 +129,8 @@ search:
   job_ids: []               # optional Freelancer skill IDs to narrow search
   project_types: [fixed, hourly]
   min_budget_usd: 30
-  max_bid_count: 60          # Freelancer AI projects get 40+ bids fast; more than 60 = very low chance
-  max_age_hours: 24          # fresh projects only; early bids win more
+  max_bid_count: 50          # cards disappear automatically once a project passes 50 bids
+  max_age_hours: 6           # only freshly posted projects; early bids win
   require_payment_verified: false   # true once you have reviews; false helps find first jobs
   min_client_rating: 0              # 0 = allow new clients
   blocked_countries: []

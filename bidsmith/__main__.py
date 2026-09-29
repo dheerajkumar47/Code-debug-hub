@@ -107,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     import socket
+    s.background_drafts = True  # cards appear instantly; the AI polishes the proposal seconds later
 
     import uvicorn
     from .web import create_app

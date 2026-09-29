@@ -88,7 +88,30 @@ def test_copy_paste_mode_dashboard_and_approve(make_bot, projects):
     bot.process([projects[40100001]], NOW)
     assert bot.approve(40100001) == bot.MANUAL
     assert bot.client.bids == [] and bot.store.get_project(40100001)["status"] == "pending"
-    page = TestClient(create_app(bot, run_loop=False)).get("/", auth=("owner", "pw")).text
-    assert "Copy &amp; paste mode" in page and "✔ Done" in page and "✅ Place bid" not in page
-    assert bot.mark_done(40100001).startswith("✔")
-    assert bot.store.get_project(40100001)["status"] == "bid_placed"
+    c = TestClient(create_app(bot, run_loop=False))
+    assert "BidSmith" in c.get("/", auth=("owner", "pw")).text
+    st = c.get("/api/state", auth=("owner", "pw")).json()
+    assert st["auto_bid"] is False and [x["id"] for x in st["cards"]] == [40100001]
+    r = c.post("/api/cards/40100001/applied", auth=("owner", "pw")).json()
+    assert r["ok"] and bot.store.get_project(40100001)["status"] == "bid_placed"
+
+
+def test_live_api_apply_with_edits_and_skip(make_bot, projects):
+    bot = make_bot(dashboard_password="pw")
+    bot.process([projects[40100001], projects[40100004]], NOW)
+    c = TestClient(create_app(bot, run_loop=False))
+    auth = ("owner", "pw")
+    assert c.get("/api/state").status_code == 401
+    st = c.get("/api/state", auth=auth).json()
+    card = next(x for x in st["cards"] if x["id"] == 40100001)
+    assert card["text"] and card["amount"] > 0 and card["bids"] == 7 and "score" not in card
+    assert any(sk["match"] for sk in card["skills"])
+    r = c.post("/api/cards/40100001/apply", auth=auth,
+               json={"text": "My edited proposal for the RAG chatbot with FastAPI and cited PDF answers.",
+                     "amount": 500, "days": 10}).json()
+    assert r["ok"], r
+    bid = bot.client.bids[0]
+    assert bid["amount"] == 500 and bid["period"] == 10 and bid["description"].startswith("My edited")
+    assert c.post("/api/cards/40100004/skip", auth=auth).json()["ok"]
+    assert c.get("/api/state", auth=auth).json()["cards"] == []
+    assert c.post("/api/pause", auth=auth).json()["message"].startswith("⏸")

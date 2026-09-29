@@ -6,6 +6,7 @@ import logging
 import random
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 
 from . import proposal, quality
@@ -44,6 +45,7 @@ class BidSmith:
         self.llm = llm
         self.index = PortfolioIndex(profile.portfolio)
         self.notifiers = notifiers if notifiers is not None else [ConsoleNotifier()]
+        self._drafter = ThreadPoolExecutor(max_workers=2, thread_name_prefix="draft")
         remembered = store.kv_get("llm_model")
         if llm is not None and remembered and not settings.llm_model:
             llm.model = remembered  # a model that worked last time (Google retires names)
@@ -140,9 +142,14 @@ class BidSmith:
                 stats["low_score"] += 1
                 continue
             price = compute_price(p, self.profile, score.score, self.s.milestone_percentage)
-            draft = proposal.write(p, self.profile, self.index, price, self.llm)
+            use_bg = self.s.background_drafts and self.llm is not None and getattr(self.llm, "enabled", False)
+            # Background mode: card appears instantly with a ready draft, the AI version replaces it seconds later.
+            draft = proposal.write(p, self.profile, self.index, price, None if use_bg else self.llm)
             self.store.save_project(p, "pending", score)
             self.store.save_draft(draft)
+            if use_bg:
+                self.store.kv_set(f"drafting:{p.id}", "1")
+                self._drafter.submit(self._polish_draft, p, price)
             if self._can_auto_submit(score.score, draft.quality.passed):
                 res = self.approve(p.id, source="auto")
                 if res.startswith("✅"):
@@ -152,6 +159,140 @@ class BidSmith:
             stats["pending"] += 1
             self.push_card(p.id)
         return stats
+
+    def _polish_draft(self, p: Project, price: Price) -> None:
+        try:
+            before = (self.store.get_draft(p.id) or {}).get("version")
+            better = proposal.write(p, self.profile, self.index, price, self.llm)
+            row, now_d = self.store.get_project(p.id), self.store.get_draft(p.id) or {}
+            # never overwrite your own edits, and don't touch a project you already applied to
+            if row and row["status"] == "pending" and now_d.get("version") == before:
+                self.store.save_draft(better)
+        except Exception as e:
+            log.warning("AI draft for #%s failed, keeping the ready draft: %s", p.id, e)
+        finally:
+            self.store.kv_del(f"drafting:{p.id}")
+
+    # ------------------------------------------------------------- live mode
+    def run_live(self) -> dict:
+        """One live cycle: just-posted projects (+1 rotating keyword search), then refresh open cards."""
+        if self.paused():
+            return {"paused": True}
+        now = time.time()
+        last = float(self.store.kv_get("last_poll") or 0)
+        since = int(max(last - 120, now - self.s.lookback_minutes * 60) if last else now - self.s.lookback_minutes * 60)
+        types = self.profile.search.get("project_types", [])
+        found: dict[int, Project] = {}
+        try:
+            for page in range(3):
+                batch = self.client.search_active("", project_types=types, limit=100, offset=page * 100, from_time=since)
+                for p in batch:
+                    found.setdefault(p.id, p)
+                if len(batch) < 100:
+                    break
+        except FreelancerError as e:
+            log.error("live feed failed: %s", e)
+        queries = self.profile.search.get("queries") or []
+        if queries:  # safety net: one skill keyword per cycle, rotating
+            i = int(self.store.kv_get("rr") or 0)
+            self.store.kv_set("rr", str(i + 1))
+            try:
+                for p in self.client.search_active(queries[i % len(queries)], project_types=types,
+                                                   limit=50, from_time=since):
+                    found.setdefault(p.id, p)
+            except FreelancerError as e:
+                log.error("keyword search failed: %s", e)
+        stats = self.process(list(found.values()), now)
+        stats["expired"] = self.refresh_open_cards()
+        self.store.kv_set("last_poll", str(now))
+        self.remember_model()
+        return stats
+
+    def refresh_open_cards(self) -> int:
+        """Remove cards whose project passed the bid limit, closed, or got too old."""
+        rows = self.store.list_projects(("pending",), 200)
+        if not rows:
+            return 0
+        limit = int(self.profile.search.get("max_bid_count", 50))
+        max_age = float(self.profile.search.get("max_age_hours", 6) or 6) * 3600 * 2
+        try:
+            live = self.client.refresh([r["id"] for r in rows]) if hasattr(self.client, "refresh") else {}
+        except FreelancerError as e:
+            log.warning("refresh failed: %s", e)
+            live = {}
+        expired = 0
+        now = time.time()
+        for r in rows:
+            info = live.get(r["id"])
+            data = json.loads(r["data"] or "{}")
+            reason = ""
+            if info:
+                self.store.update_bid_count(r["id"], info["bid_count"])
+                if info["bid_count"] > limit:
+                    reason = f"passed {limit} bids"
+                elif not info["open"]:
+                    reason = "project closed"
+            if not reason and data.get("time_submitted") and now - data["time_submitted"] > max_age:
+                reason = "too old"
+            if reason:
+                self.store.set_status(r["id"], "expired", reason)
+                expired += 1
+        return expired
+
+    def live_state(self) -> dict:
+        """Everything the live dashboard shows."""
+        now = time.time()
+        cards = []
+        mine = {s.lower() for s in self.profile.all_skills}
+        from .scoring import _norm
+        mine_norm = {_norm(s) for s in self.profile.all_skills}
+        for r in self.store.list_projects(("pending",), 100):
+            d = self.store.get_draft(r["id"]) or {}
+            p = json.loads(r["data"] or "{}")
+            client = p.get("client") or {}
+            proof = next((x[len("best proof: "):] for x in json.loads(r["reasons"] or "[]")
+                          if x.startswith("best proof: ")), "")
+            q = json.loads(d.get("quality") or "{}")
+            cards.append({
+                "id": r["id"], "title": r["title"], "url": r["url"], "type": p.get("type", "fixed"),
+                "currency": p.get("currency", "USD"), "budget_min": p.get("budget_min", 0),
+                "budget_max": p.get("budget_max", 0), "bids": p.get("bid_count", 0),
+                "posted_s": int(now - p["time_submitted"]) if p.get("time_submitted") else None,
+                "country": client.get("country", ""), "verified": bool(client.get("payment_verified")),
+                "rating": client.get("rating", 0), "reviews": client.get("reviews", 0),
+                "skills": [{"name": sk, "match": sk.lower() in mine or _norm(sk) in mine_norm}
+                           for sk in p.get("skills", [])],
+                "fit": proof, "text": d.get("text", ""), "amount": d.get("amount", 0),
+                "amount_usd": d.get("amount_usd", 0), "days": d.get("period_days", 7),
+                "drafting": bool(self.store.kv_get(f"drafting:{r['id']}")),
+                "notes": [i for i in q.get("issues", []) if "client asked" in i],
+                "created": r["created_at"],
+            })
+        cards.sort(key=lambda c: c["created"] or 0, reverse=True)
+        applied = [{"title": r["title"], "url": r["url"], "note": r["note"] or ""}
+                   for r in self.store.list_projects(("bid_placed", "auto_bid"), 10)]
+        last = float(self.store.kv_get("last_poll") or 0)
+        return {
+            "live": not self.paused(), "auto_bid": self.can_bid(),
+            "checked_s": int(now - last) if last else None,
+            "every_s": self.s.live_poll_seconds, "applied_today": self.store.bids_since(now - 86400),
+            "max_bids": int(self.profile.search.get("max_bid_count", 50)),
+            "cards": cards, "applied": applied,
+        }
+
+    def apply(self, pid: int, text: str | None = None, amount: float | None = None,
+              days: int | None = None) -> str:
+        """One click: save your edits (if any), then place the bid."""
+        d = self.store.get_draft(pid)
+        if not d:
+            return f"❓ #{pid} not found"
+        if text is not None and text.strip() and text.strip() != (d["text"] or "").strip():
+            self.edit(pid, text)
+        if amount and (float(amount) != float(d["amount"]) or (days and int(days) != int(d["period_days"]))):
+            self.set_price(pid, float(amount), int(days) if days else None)
+        elif days and int(days) != int(d["period_days"]):
+            self.set_price(pid, float(d["amount"]), int(days))
+        return self.approve(pid)
 
     def threshold(self) -> int:
         """Minimum score for a card. Set from the dashboard (saved), else from .env."""

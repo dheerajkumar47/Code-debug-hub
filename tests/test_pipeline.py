@@ -112,3 +112,47 @@ def test_crowded_but_great_fit_is_shown_not_lost(make_bot, projects):
     bot.process([old], NOW)
     assert 556 not in [r["id"] for r in bot.hidden_summary(now=NOW)[2]]  # a week old: not worth a bid
     assert bot.draft_anyway(555).startswith("✍")
+
+
+def test_live_cycle_finds_new_and_removes_cards_past_50_bids(make_bot, projects):
+    import dataclasses, time as _t
+    fresh = [dataclasses.replace(projects[i], time_submitted=int(_t.time()) - 120) for i in (40100001, 40100004)]
+    bot = make_bot()
+    bot.client.projects = fresh
+    live = {40100001: {"bid_count": 9, "open": True}, 40100004: {"bid_count": 12, "open": True}}
+    bot.client.refresh = lambda ids: {i: live[i] for i in ids if i in live}
+    st = bot.run_live()
+    assert st["pending"] == 2 and st["expired"] == 0 and bot.store.kv_get("last_poll")
+    live[40100004] = {"bid_count": 51, "open": True}      # crossed 50 → disappears
+    live[40100001] = {"bid_count": 14, "open": True}
+    st = bot.run_live()
+    assert st["expired"] == 1
+    ids = [c["id"] for c in bot.live_state()["cards"]]
+    assert ids == [40100001]
+    assert bot.live_state()["cards"][0]["bids"] == 14     # bid count kept up to date
+    live[40100001] = {"bid_count": 14, "open": False}     # client closed it → disappears
+    bot.run_live()
+    assert bot.live_state()["cards"] == []
+
+
+def test_background_draft_shows_card_instantly_then_polishes(make_bot, projects):
+    import threading
+    gate = threading.Event()
+
+    class SlowLLM(FakeLLM):
+        def complete(self, *a, **k):
+            gate.wait(5)
+            return super().complete(*a, **k)
+
+    good = ("You need a RAG chatbot over ~800 internal PDFs that cites sources. I built a RAG Chatbot with a "
+            "LangGraph router (Pinecone + FastAPI): https://github.com/dheerajkumar47/IntelliCourse\n"
+            "Plan: 1) ingest PDFs, 2) retrieval with citations, 3) FastAPI + React widget, 4) Docker deploy. "
+            "Which vector database do you prefer? — Dheeraj")
+    bot = make_bot(llm=SlowLLM([good]), background_drafts=True)
+    bot.process([projects[40100001]], NOW)
+    card = bot.live_state()["cards"][0]
+    assert card["drafting"] and card["text"]          # ready draft already there
+    gate.set()
+    bot._drafter.shutdown(wait=True)
+    card = bot.live_state()["cards"][0]
+    assert not card["drafting"] and card["text"] == good
