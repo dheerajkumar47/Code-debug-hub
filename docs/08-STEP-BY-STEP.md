@@ -45,6 +45,12 @@ so every card gets a full AI-written proposal.
    **Already running the bot?** Make a new `keys.txt` with **only** the `GROQ:` line, save it in the bot folder,
    then double-click `start.bat`. Your other keys are kept.
 
+## AI keys: which one writes
+You can give any mix of **OpenAI**, **Gemini**, **Groq** (and Claude). The bot uses them in this order:
+**OpenAI → Claude → Gemini → Groq**. If one is busy or out of credit, the next one writes the proposal.
+To add a key later, make a `keys.txt` with just that line (for example `OPENAI: sk-...`) and double-click `start.bat`.
+Your other keys are kept.
+
 ## PART 3: Install Python (5 min, once)
 1. Go to **https://www.python.org/downloads/**
 2. Click the yellow **Download Python 3.12.x** (or newer) button.
@@ -75,6 +81,7 @@ so every card gets a full AI-written proposal.
    FREELANCER: paste-your-freelancer-token-here
    GEMINI: paste-your-gemini-key-here
    GROQ: paste-your-groq-key-here
+   OPENAI: paste-your-openai-key-here   (optional, best quality)
    ```
    - The Freelancer token goes all on **one line**. Don't add spaces inside it.
 3. Click **File → Save As**:

@@ -51,6 +51,11 @@ class Settings:
     llm_model: str = ""
     llm_base_url: str = ""  # optional, OpenAI-compatible (Groq, OpenRouter, ...)
     llm_score_enabled: bool = False
+    # One key per AI provider; all that are set are used, in AI_ORDER, each one a backup for the one before.
+    openai_key: str = ""
+    gemini_key: str = ""
+    anthropic_key: str = ""
+    ai_order: str = "openai,anthropic,gemini,groq"
     # Backup AI (OpenAI-compatible, e.g. Groq — free). Used automatically when the main AI is busy.
     llm_fallback_key: str = ""
     llm_fallback_base_url: str = "https://api.groq.com/openai/v1"
@@ -104,6 +109,10 @@ class Settings:
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_score_enabled=_bool(e("LLM_SCORE_ENABLED"), False),
             llm_fallback_key=clean_secret(e("LLM_FALLBACK_KEY", "")),
+            openai_key=clean_secret(e("OPENAI_API_KEY", "")),
+            gemini_key=clean_secret(e("GEMINI_API_KEY", "")),
+            anthropic_key=clean_secret(e("ANTHROPIC_API_KEY", "")),
+            ai_order=e("AI_ORDER", "openai,anthropic,gemini,groq"),
             llm_fallback_base_url=e("LLM_FALLBACK_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
             llm_fallback_model=e("LLM_FALLBACK_MODEL", ""),
             whatsapp_token=clean_secret(e("WHATSAPP_TOKEN", "")),

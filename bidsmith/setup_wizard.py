@@ -86,7 +86,9 @@ def parse_keys_file(text: str) -> dict[str, str]:
             out["LLM_FALLBACK_BASE_URL"] = "https://openrouter.ai/api/v1"
         elif any(k in label for k in _PROVIDER_LABELS):
             prov = next(v for k, v in _PROVIDER_LABELS.items() if k in label)
-            out["LLM_PROVIDER"], out["LLM_API_KEY"] = prov, value
+            out[f"{prov.upper()}_API_KEY"] = value
+            out.setdefault("LLM_PROVIDER", prov)
+            out.setdefault("LLM_API_KEY", value)
         elif value:
             unlabeled.append(value)
     if "FREELANCER_OAUTH_TOKEN" not in out and unlabeled:
@@ -124,17 +126,28 @@ def run(env_path: str = ".env", ask=input, ask_secret=input) -> Path:
     keys_file = find_keys_file(path.parent)
     if keys_file:
         found = parse_keys_file(keys_file.read_text(encoding="utf-8-sig", errors="ignore"))
+        # keep the key you already had: move the old single AI key into its own provider slot first
+        old_prov, old_key = _current(lines, "LLM_PROVIDER"), _current(lines, "LLM_API_KEY")
+        if old_key and old_prov in ("openai", "gemini", "anthropic") and not _current(lines, f"{old_prov.upper()}_API_KEY"):
+            lines = _set(lines, f"{old_prov.upper()}_API_KEY", old_key)
         for k, v in found.items():
+            if k in ("LLM_PROVIDER", "LLM_API_KEY") and old_key:
+                continue  # the provider-specific slot already holds the new key
             lines = _set(lines, k, v)
         print(f"Read {keys_file.name}:")
         if "FREELANCER_OAUTH_TOKEN" in found:
             print(f"   ✔ Freelancer token  {mask(found['FREELANCER_OAUTH_TOKEN'])}")
-        if "LLM_API_KEY" in found:
+        for prov in ("OPENAI", "GEMINI", "ANTHROPIC"):
+            if f"{prov}_API_KEY" in found:
+                print(f"   ✔ {prov.title()} key  {mask(found[f'{prov}_API_KEY'])}")
+        if "LLM_API_KEY" in found and not any(f"{p}_API_KEY" in found for p in ("OPENAI", "GEMINI", "ANTHROPIC")):
             print(f"   ✔ {found['LLM_PROVIDER']} key  {mask(found['LLM_API_KEY'])}")
         if "LLM_FALLBACK_KEY" in found:
             print(f"   ✔ backup AI key  {mask(found['LLM_FALLBACK_KEY'])}")
-        missing = [k for k in ("FREELANCER_OAUTH_TOKEN", "LLM_API_KEY") if k not in found
-                   and not _current(lines, k)]  # a keys.txt with only the new key keeps the others
+        has_ai = any(_current(lines, k) for k in ("LLM_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
+                                                   "ANTHROPIC_API_KEY", "LLM_FALLBACK_KEY"))
+        missing = [k for k in ("FREELANCER_OAUTH_TOKEN", "LLM_API_KEY")
+                   if not (_current(lines, k) or (k == "LLM_API_KEY" and has_ai))]
         for key, prompt, secret, default in REQUIRED:
             if key in missing or (key == "LLM_PROVIDER" and "LLM_API_KEY" in missing):
                 lines = _ask_field(lines, key, prompt, secret, default, ask, ask_secret)

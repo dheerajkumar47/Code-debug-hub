@@ -152,14 +152,19 @@ class LLM:
     OPENAI_COMPAT_PREFS = ("llama-3.3-70b", "gpt-oss-120b", "llama-4-maverick", "qwen3-32b", "llama-4-scout",
                            "70b", "gpt-oss", "llama", "qwen", "mixtral")
 
+    OPENAI_PREFS = ("gpt-4.1-mini", "gpt-5-mini", "gpt-4o-mini", "gpt-4.1", "gpt-5", "gpt-4o")
+
     def _openai_pick_model(self) -> str:
         base = self.base_url or "https://api.openai.com/v1"
+        official = "api.openai.com" in base
         r = self._http.get(f"{base}/models", headers={"Authorization": f"Bearer {self.api_key}"})
         if r.status_code >= 400:
             raise LLMError(f"{self.provider} HTTP {r.status_code}: {r.text[:300]}")
         ids = [m.get("id", "") for m in r.json().get("data", [])]
-        chat = [i for i in ids if not any(x in i for x in ("whisper", "tts", "guard", "embed", "vision", "audio"))]
-        for pref in self.OPENAI_COMPAT_PREFS:
+        chat = [i for i in ids if not any(x in i for x in ("whisper", "tts", "guard", "embed", "vision", "audio",
+                                                          "image", "dall-e", "moderation", "realtime",
+                                                          "transcribe", "search"))]
+        for pref in (self.OPENAI_PREFS if official else self.OPENAI_COMPAT_PREFS):
             hit = next((i for i in chat if pref in i), None)
             if hit:
                 return hit
@@ -171,16 +176,34 @@ class LLM:
         base = self.base_url or "https://api.openai.com/v1"
         if not self.model:
             self.model = self._openai_pick_model()
-        body = lambda: {"model": self.model, "max_tokens": max_tokens, "temperature": temperature,  # noqa: E731
-                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        opts = {"tokens_key": "max_tokens", "temperature": True}
+
+        def body() -> dict:
+            b = {"model": self.model, opts["tokens_key"]: max_tokens + (2000 if opts["tokens_key"] ==
+                 "max_completion_tokens" else 0),
+                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+            if opts["temperature"]:
+                b["temperature"] = temperature
+            return b
+
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        try:
-            data = self._post(f"{base}/chat/completions", headers, body())
-        except LLMError as e:  # model retired on the host → pick a current one once
-            if not any(c in str(e) for c in (" 404", "decommissioned", "model_not_found", "does not exist")):
-                raise
-            self.model = self._openai_pick_model()
-            data = self._post(f"{base}/chat/completions", headers, body())
+        data = None
+        for _ in range(4):
+            try:
+                data = self._post(f"{base}/chat/completions", headers, body())
+                break
+            except LLMError as e:
+                msg = str(e)
+                if any(c in msg for c in (" 404", "decommissioned", "model_not_found", "does not exist")):
+                    self.model = self._openai_pick_model()          # model retired → pick a current one
+                elif "max_tokens" in msg and opts["tokens_key"] == "max_tokens":
+                    opts["tokens_key"] = "max_completion_tokens"    # newer models renamed the parameter
+                elif "temperature" in msg and opts["temperature"]:
+                    opts["temperature"] = False                     # some models only allow the default
+                else:
+                    raise
+        if data is None:
+            raise LLMError(f"{self.provider}: request failed")
         return data["choices"][0]["message"]["content"] or ""
 
     def _anthropic(self, system, user, max_tokens, temperature):
@@ -224,8 +247,13 @@ class LLMChain:
 
     @property
     def names(self) -> str:
-        return " → ".join(f"{x.provider}{'(' + x.base_url.split('//')[-1].split('/')[0] + ')' if x.base_url else ''}"
-                          for x in self.llms)
+        def label(x: LLM) -> str:
+            if x.base_url and "groq" in x.base_url:
+                return "Groq"
+            if x.base_url and "openrouter" in x.base_url:
+                return "OpenRouter"
+            return {"openai": "OpenAI", "gemini": "Gemini", "anthropic": "Claude"}.get(x.provider, x.provider)
+        return " → ".join(label(x) for x in self.llms)
 
     def complete(self, system: str, user: str, max_tokens: int = 700, temperature: float = 0.6) -> str:
         last: Exception | None = None

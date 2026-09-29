@@ -75,3 +75,20 @@ def test_keys_file_with_groq_backup(tmp_path, monkeypatch):
     text = run(".env", ask=lambda _: (_ for _ in ()).throw(AssertionError("should not ask")),
                ask_secret=lambda _: (_ for _ in ()).throw(AssertionError("should not ask"))).read_text()
     assert f"FREELANCER_OAUTH_TOKEN={FL}" in text and "LLM_FALLBACK_KEY=gsk_" in text
+
+
+def test_adding_openai_keeps_gemini_and_orders_openai_first(tmp_path, monkeypatch):
+    from bidsmith.app import build_llm
+    from bidsmith.config import Settings
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(f"FREELANCER_OAUTH_TOKEN={FL}\nLLM_PROVIDER=gemini\nLLM_API_KEY={AI}\n"
+                                   "LLM_FALLBACK_KEY=gsk_abcdefghijklmnopqrstuvwxyz123456\n")
+    (tmp_path / "keys.txt").write_text("OPENAI: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789\n")
+    no = lambda _: (_ for _ in ()).throw(AssertionError("should not ask"))  # noqa: E731
+    text = run(".env", ask=no, ask_secret=no).read_text()
+    assert "OPENAI_API_KEY=sk-proj-" in text and f"GEMINI_API_KEY={AI}" in text and f"LLM_API_KEY={AI}" in text
+    for k in ("OPENAI_API_KEY", "GEMINI_API_KEY", "LLM_API_KEY", "LLM_PROVIDER", "LLM_FALLBACK_KEY",
+              "ANTHROPIC_API_KEY", "LLM_MODEL", "LLM_BASE_URL", "AI_ORDER"):
+        monkeypatch.delenv(k, raising=False)
+    chain = build_llm(Settings.load(".env"))
+    assert chain.names == "OpenAI → Gemini → Groq"

@@ -207,3 +207,24 @@ def test_backup_ai_writes_when_gemini_is_busy():
     assert main.cooling and "groq" in used
     used.clear()
     assert chain.complete("s", "u") == "Groq proposal" and "gemini" not in used   # main skipped while cooling
+
+
+def test_openai_handles_new_parameter_names_and_retired_models():
+    sent = []
+
+    def handler(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "gpt-image-1"}, {"id": "gpt-5-mini"}]})
+        b = json.loads(req.content)
+        sent.append(b)
+        if b["model"] == "gpt-4.1-mini":
+            return httpx.Response(404, json={"error": {"code": "model_not_found", "message": "does not exist"}})
+        if "max_tokens" in b:
+            return httpx.Response(400, json={"error": {"message": "Unsupported parameter: 'max_tokens'"}})
+        if "temperature" in b:
+            return httpx.Response(400, json={"error": {"message": "Unsupported value: 'temperature'"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
+
+    llm = LLM("openai", "sk-x", transport=httpx.MockTransport(handler))
+    assert llm.complete("s", "u") == "OK"
+    assert llm.model == "gpt-5-mini" and "max_completion_tokens" in sent[-1] and "temperature" not in sent[-1]

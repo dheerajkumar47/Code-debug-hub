@@ -35,6 +35,24 @@ HELP = """BidSmith commands:
 • cancel — cancel an edit"""
 
 
+def build_llm(s: Settings):
+    """Every AI key you gave, in AI_ORDER (default OpenAI → Claude → Gemini → Groq); each backs up the one before."""
+    found: dict[str, LLM] = {}
+    if s.llm_api_key and s.llm_provider in ("openai", "gemini", "anthropic"):  # the original single-key setting
+        name = "groq" if (s.llm_provider == "openai" and s.llm_base_url) else s.llm_provider
+        found[name] = LLM(s.llm_provider, s.llm_api_key, s.llm_model, s.llm_base_url)
+    for name, key in (("openai", s.openai_key), ("gemini", s.gemini_key), ("anthropic", s.anthropic_key)):
+        if key:
+            found[name] = LLM(name, key, s.llm_model if s.llm_provider == name else "")
+    if s.llm_fallback_key:
+        found["groq"] = LLM("openai", s.llm_fallback_key, s.llm_fallback_model, s.llm_fallback_base_url)
+    order = [x.strip() for x in s.ai_order.split(",") if x.strip()]
+    chain = [found[n] for n in order if n in found] + [v for n, v in found.items() if n not in order]
+    if not chain:
+        return LLM("none", "")
+    return chain[0] if len(chain) == 1 else LLMChain(chain)
+
+
 class BidSmith:
     def __init__(self, settings: Settings, profile: Profile, store: Store,
                  client: FreelancerClient | None = None, llm: LLM | None = None, notifiers=None):
@@ -61,10 +79,7 @@ class BidSmith:
         store = Store(s.db_path)
         # Always create the client: project search is public; bidding only needs the token.
         client = FreelancerClient(s.freelancer_token or None, s.freelancer_api_url, s.freelancer_site_url)
-        main = LLM(s.llm_provider, s.llm_api_key, s.llm_model, s.llm_base_url)
-        backup = LLM("openai", s.llm_fallback_key, s.llm_fallback_model, s.llm_fallback_base_url) \
-            if s.llm_fallback_key else None
-        llm = LLMChain([main, backup]) if backup else main
+        llm = build_llm(s)
         notifiers = []
         for ch in s.notify_channels:
             if ch == "console":
