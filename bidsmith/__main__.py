@@ -12,6 +12,19 @@ from .config import Settings, mask
 from .freelancer import parse_project
 
 
+def keep_awake() -> None:
+    """Windows: stop the PC from sleeping while the bot runs (the screen may still turn off)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+        print("  Keeping this PC awake while BidSmith runs (the screen can still turn off).")
+    except Exception:
+        pass
+
+
 def run_check(s: Settings) -> int:
     """Only a broken project search blocks start-up. Everything else degrades gracefully with a clear note."""
     bot = BidSmith.from_settings(s)
@@ -109,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import socket
     s.background_drafts = True  # cards appear instantly; the AI polishes the proposal seconds later
+    keep_awake()
 
     import uvicorn
     from .web import create_app
