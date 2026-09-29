@@ -362,7 +362,31 @@ class BidSmith:
             "max_bids": int(self.profile.search.get("max_bid_count", 50)),
             "cards": cards, "applied": applied,
             "checked_today": self.today("checked"), "matched_today": self.today("matched"),
+            "gone_today": self._gone_today(),
         }
+
+    GONE_REASONS = (("bid", "Passed the bid limit"), ("closed", "Client closed it"), ("too old", "Too old"),
+                    ("not an ai", "Not an AI project"), ("manual", "Applied ✓"))
+
+    def _gone_today(self, limit: int = 20) -> list[dict]:
+        """Today's matches that are no longer open, with the reason, newest first."""
+        midnight = time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))
+        out = []
+        for r in self.store.list_projects(("expired", "skipped", "bid_placed", "auto_bid", "bid_failed"), 300):
+            if (r["updated_at"] or 0) < midnight or not self.store.get_draft(r["id"]):
+                continue
+            note = (r["note"] or "").lower()
+            if r["status"] == "skipped":
+                why = "You skipped"
+            elif r["status"] in ("bid_placed", "auto_bid"):
+                why = "Applied ✓"
+            elif r["status"] == "bid_failed":
+                why = "Bid failed"
+            else:
+                why = next((label for key, label in self.GONE_REASONS if key in note), "No longer open")
+            out.append({"title": r["title"], "url": r["url"], "why": why, "at": r["updated_at"]})
+        out.sort(key=lambda x: x["at"] or 0, reverse=True)
+        return out[:limit]
 
     def apply(self, pid: int, text: str | None = None, amount: float | None = None,
               days: int | None = None) -> str:

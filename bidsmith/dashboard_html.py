@@ -68,7 +68,8 @@ padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;ma
 <header><div class="brand">Bid<span>Smith</span></div>
 <div class="bar"><span class="pill"><span id="dot" class="dot"></span><span id="status">Connecting…</span></span>
 <span class="pill">Checked today <b id="checked">0</b></span>
-<span class="pill">Matched <b id="matched">0</b></span>
+<span class="pill">Matched today <b id="matched">0</b></span>
+<span class="pill">Open now <b id="open">0</b></span>
 <span class="pill">Applied <b id="applied">0</b></span>
 <button id="pause" class="ghost" title="Pause or resume searching">Pause</button></div></header>
 <div id="notice"></div>
@@ -77,7 +78,7 @@ padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;ma
 <div style="font-weight:600;color:var(--ink);margin-bottom:4px">Watching Freelancer for projects that match you</div>
 <div>New matches appear here automatically, within seconds. Keep this page open.</div>
 <div id="counts" style="margin-top:14px;font-size:13px"></div></div>
-<div class="applied" id="appliedBox" style="display:none"><h3>Recently applied</h3><ul id="appliedList"></ul></div>
+<div class="applied" id="appliedBox" style="display:none"><h3>Today's matches that are no longer open</h3><ul id="appliedList"></ul></div>
 </div><div id="toast" class="toast"></div>
 <script>
 const $=s=>document.querySelector(s), esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -137,7 +138,9 @@ async function apply(id,el){const b=el.querySelector('[data-a=apply]');
 async function act(id,what,el,remove){try{const r=await api(`/api/cards/${id}/${what}`,{});toast(r.message);if(remove)removeCard(id)}catch(e){toast(e.message)}}
 function render(st){autoBid=st.auto_bid;live=st.live;$("#applied").textContent=st.applied_today;
  $("#checked").textContent=st.checked_today;$("#matched").textContent=st.matched_today;
- $("#counts").textContent=st.checked_today?`${st.checked_today} new projects checked today · ${st.matched_today} matched your skills`:"";
+ $("#open").textContent=st.cards.length;
+ $("#counts").textContent=st.checked_today?`${st.checked_today} new projects checked today · ${st.matched_today} matched your skills`+
+  (st.matched_today&&!st.cards.length?" · none open right now (see below why)":""):"";
  $("#dot").className="dot"+(live?"":" off");$("#pause").textContent=live?"Pause":"Resume";
  $("#status").textContent=!live?"Paused":st.checked_s==null?"Starting…":`Live · checked ${st.checked_s<5?"just now":st.checked_s+"s ago"}`;
  $("#notice").innerHTML=autoBid?"":`<div class="notice"><b>Copy &amp; paste mode.</b> Freelancer did not accept your token for bidding, so Apply copies the proposal and opens the project for you to paste. Everything else is automatic.</div>`;
@@ -147,8 +150,8 @@ function render(st){autoBid=st.auto_bid;live=st.live;$("#applied").textContent=s
   if(!first){el.classList.add("enter");fresh.push(c)}$("#cards").prepend(el);cards.set(c.id,el)}});
  if(fresh.length){beep();flash(fresh.length);fresh.forEach(notify)}
  $("#empty").style.display=cards.size?"none":"";
- $("#appliedBox").style.display=st.applied.length?"":"none";
- $("#appliedList").innerHTML=st.applied.map(a=>`<li><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("");first=false}
+ $("#appliedBox").style.display=st.gone_today.length?"":"none";
+ $("#appliedList").innerHTML=st.gone_today.map(a=>`<li style="display:flex;justify-content:space-between;gap:10px"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a><span style="color:var(--mut);white-space:nowrap;font-size:13px">${esc(a.why)}</span></li>`).join("");first=false}
 async function tick(){try{render(await api("/api/state"))}catch(e){$("#status").textContent="Reconnecting…";$("#dot").className="dot off"}}
 $("#pause").onclick=async()=>{const r=await api("/api/pause",{});toast(r.message);tick()};
 document.addEventListener("click",()=>{if("Notification"in window&&Notification.permission=="default")Notification.requestPermission()},{once:true});

@@ -200,3 +200,22 @@ def test_card_says_whether_the_ai_wrote_it(make_bot, projects):
     bot.llm = FakeLLM([good])
     assert bot.regenerate(40100001).startswith("🔁 New AI proposal")
     assert bot.live_state()["cards"][0]["ai"] is True
+
+
+def test_todays_matches_that_left_show_why(make_bot, projects):
+    import dataclasses, time as _t
+    fresh = [dataclasses.replace(projects[i], time_submitted=int(_t.time()) - 60) for i in (40100001, 40100004, 40100002)]
+    bot = make_bot()
+    bot.client.projects = fresh
+    live = {40100001: {"bid_count": 9, "open": True}, 40100004: {"bid_count": 9, "open": True},
+            40100002: {"bid_count": 9, "open": True}}
+    bot.client.refresh = lambda ids: {i: live[i] for i in ids if i in live}
+    bot.run_live()
+    bot.skip(40100004)
+    bot.approve(40100002)
+    live[40100001] = {"bid_count": 77, "open": True}
+    bot.run_live()
+    st = bot.live_state()
+    assert st["cards"] == []
+    why = {g["title"][:10]: g["why"] for g in st["gone_today"]}
+    assert why == {"RAG chatbo": "Passed the bid limit", "YOLO peopl": "You skipped", "WhatsApp A": "Applied ✓"}
