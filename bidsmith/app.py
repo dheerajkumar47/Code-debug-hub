@@ -124,7 +124,9 @@ class BidSmith:
             stats["new"] += 1
             ok, why = rule_filter(p, self.profile, now)
             if not ok:
-                self.store.save_project(p, "filtered", note="; ".join(why))
+                # still score it, so crowded/old but perfect-fit projects can be shown to you
+                self.store.save_project(p, "filtered", heuristic_score(p, self.profile, self.index, now),
+                                        note="; ".join(why))
                 stats["filtered"] += 1
                 continue
             score = heuristic_score(p, self.profile, self.index, now)
@@ -176,8 +178,10 @@ class BidSmith:
         self.store.save_draft(proposal.write(p, self.profile, self.index, price, self.llm))
         return f"✍ Bid written for #{pid} — it is at the top of your list."
 
-    def hidden_summary(self, limit: int = 8) -> tuple[list[tuple[str, int]], list[dict]]:
-        """(top reasons projects were filtered, best weak matches) — so nothing is a black box."""
+    SOFT_REASONS = ("bids >", "too old")  # crowded or older: still worth a look if the fit is great
+
+    def hidden_summary(self, limit: int = 8) -> tuple[list[tuple[str, int]], list[dict], list[dict]]:
+        """(top filter reasons, best weak matches, good fits hidden only for being crowded/old)."""
         from collections import Counter
         reasons: Counter = Counter()
         for r in self.store.list_projects(("filtered",), 1000):
@@ -187,9 +191,14 @@ class BidSmith:
                     key = "budget too small" if key.startswith("budget $") else key
                     key = "too many bids already" if " bids > " in key else key
                     key = "hourly rate below your floor" if key.startswith("hourly max") else key
+                    key = "too old (over 24h)" if key.startswith("too old") else key
                     reasons[key] += 1
         weak = sorted(self.store.list_projects(("low_score",), 500), key=lambda r: r["score"] or 0, reverse=True)
-        return reasons.most_common(6), weak[:limit]
+        soft = [r for r in self.store.list_projects(("filtered",), 1000)
+                if (r["score"] or 0) >= self.threshold() - 10 and r.get("note")
+                and all(any(k in part for k in self.SOFT_REASONS) for part in r["note"].split("; "))]
+        soft.sort(key=lambda r: r["score"] or 0, reverse=True)
+        return reasons.most_common(6), weak[:limit], soft[:limit]
 
     def run_once(self) -> dict:
         if self.paused():

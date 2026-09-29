@@ -29,7 +29,7 @@ def rule_filter(p: Project, profile: Profile, now: float | None = None) -> tuple
 
     max_age_h = float(s.get("max_age_hours", 0) or 0)
     if max_age_h and p.time_submitted and (now - p.time_submitted) > max_age_h * 3600:
-        fails.append("too old")
+        fails.append(f"too old ({(now - p.time_submitted) / 3600:.0f}h)")
 
     if s.get("require_payment_verified") and not p.client.payment_verified:
         fails.append("client payment not verified")

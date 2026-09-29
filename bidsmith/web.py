@@ -204,13 +204,20 @@ def render(bot: BidSmith, rows: list[dict], done: list[dict]) -> str:
 <a href="{e(r['url'])}" target=_blank rel=noopener><button type=button>↗ Open</button></a>
 <form method=post action="/p/{pid}/regen"><button class=pri>🔁 Regenerate</button></form>
 <form method=post action="/p/{pid}/skip"><button class=no>⏭ Skip</button></form></div></div>""")
-    reasons, weak = bot.hidden_summary()
+    reasons, weak, soft = bot.hidden_summary()
     reason_html = "".join(f"<li><b>{n}</b> × {e(k)}</li>" for k, n in reasons) or "<li>none</li>"
     weak_html = "".join(
         f"<li class=wk><span><b>{r['score']}</b> · <a href='{e(r['url'])}' target=_blank rel=noopener>{e(r['title'][:70])}</a></span>"
         f"<form method=post action='/p/{r['id']}/draft'><button>✍ Write bid</button></form></li>" for r in weak
     ) or "<li>none</li>"
-    hidden = f"""<div class=card><div class=t>Hidden projects: why</div>
+    soft_html = "".join(
+        f"<li class=wk><span><b>{r['score']}</b> · <a href='{e(r['url'])}' target=_blank rel=noopener>{e(r['title'][:70])}</a>"
+        f"<br><span class=m>{e(r['note'])}</span></span>"
+        f"<form method=post action='/p/{r['id']}/draft'><button>✍ Write bid</button></form></li>" for r in soft)
+    soft_card = (f"""<div class=card><div class=t>⭐ Good fits hidden only because they are crowded or older</div>
+<div class=m>Strong skill match. Worth a bid if you still want to try: press ✍ Write bid.</div>
+<ul class="m wl">{soft_html}</ul></div>""" if soft else "")
+    hidden = soft_card + f"""<div class=card><div class=t>Hidden projects: why</div>
 <div class=m>Projects the bot skipped, so nothing is a black box.</div>
 <div class=cols><div><div class=m><b>Filtered out, top reasons</b></div><ul class=m>{reason_html}</ul></div>
 <div><div class=m><b>Weak matches (best first)</b>, press ✍ to write a bid anyway</div><ul class="m wl">{weak_html}</ul></div></div>

@@ -86,7 +86,7 @@ def test_ai_forgetting_client_instruction_is_fixed_automatically(make_bot, proje
 def test_hidden_projects_threshold_recheck_and_draft_anyway(make_bot, projects):
     bot = make_bot()
     bot.process(list(projects.values()), NOW)
-    reasons, weak = bot.hidden_summary()
+    reasons, weak, soft = bot.hidden_summary()
     assert any("logo design" in k for k, _ in reasons) and weak
     weak_id = weak[0]["id"]
     assert bot.draft_anyway(weak_id).startswith("✍")
@@ -97,3 +97,15 @@ def test_hidden_projects_threshold_recheck_and_draft_anyway(make_bot, projects):
     assert bot.threshold() == 30
     bot.recheck_hidden()
     assert all(r["status"] != "low_score" for r in bot.store.list_projects(("low_score",), 50))
+
+
+def test_crowded_but_great_fit_is_shown_not_lost(make_bot, projects):
+    import dataclasses
+    crowded = dataclasses.replace(projects[40100001], id=555, bid_count=95)
+    bot = make_bot()
+    bot.process([crowded], NOW)
+    row = bot.store.get_project(555)
+    assert row["status"] == "filtered" and row["score"] >= 70
+    _, _, soft = bot.hidden_summary()
+    assert [r["id"] for r in soft] == [555]
+    assert bot.draft_anyway(555).startswith("✍")
