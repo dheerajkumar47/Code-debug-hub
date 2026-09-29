@@ -22,14 +22,18 @@ Freelancer API ──► BidSmith (your PC or a free VM) ──► WhatsApp card
 
 ---
 
-## 1. Freelancer.com API token
-1. Log in to Freelancer, then open **https://accounts.freelancer.com/settings/develop** (or go to *Settings → Developer / API*, via developers.freelancer.com).
-2. Create an app and generate an **OAuth access token** for your own account. It needs the scopes for **basic** access and **advanced** (bidding).
-3. Put it in `.env` as `FREELANCER_OAUTH_TOKEN=...`.
-4. Test the token: `python -m bidsmith check` should print `OK: Freelancer user id ...`.
-5. Optional: test safely against the sandbox first by setting `FREELANCER_API_URL=https://www.freelancer-sandbox.com/api`.
+## 1. Freelancer.com API token (2 minutes)
+1. Open **https://accounts.freelancer.com/settings/develop** (menu: *Develop with Freelancer.com*).
+2. In the top box, **Generate Token**, click the blue **Generate Token** button and approve it. Copy the token it shows.
+   - **Skip "Create New Application".** That form is for apps other people will use, and it takes about 5 business days to review. Your personal token is all the bot needs.
+3. On **your computer**, in the BidSmith folder, run:
+   ```bash
+   python -m bidsmith setup
+   ```
+   Paste the token when asked. It stays hidden while you paste. The wizard saves it to `.env` (git-ignored, owner-only permissions) and creates your dashboard password.
+4. Run `python -m bidsmith check`. You should see `OK: Freelancer user id ...`.
 
-> ⚠️ Freelancer.com's own pages were blocked from this build environment, so the menu names above may differ slightly. The API endpoints the bot uses are taken from Freelancer's official Python SDK.
+> 🔒 Never put the token in the GitHub repo, a screenshot or a chat. Anyone holding it can bid as you. If it ever leaks, go back to the same page and revoke or regenerate it.
 
 ## 2. WhatsApp Cloud API (about 20 min)
 1. Go to **https://developers.facebook.com** → *My Apps* → **Create app** → type **Business** → add the **WhatsApp** product.

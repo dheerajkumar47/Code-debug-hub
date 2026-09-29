@@ -1,4 +1,4 @@
-"""CLI: python -m bidsmith <serve|run-once|demo|check>"""
+"""CLI: python -m bidsmith <setup|check|demo|serve|run-once>"""
 from __future__ import annotations
 
 import argparse
@@ -14,12 +14,17 @@ from .freelancer import parse_project
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="bidsmith")
-    ap.add_argument("cmd", choices=["serve", "run-once", "demo", "check"])
+    ap.add_argument("cmd", choices=["setup", "serve", "run-once", "demo", "check"])
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--file", default="tests/fixtures/projects.json", help="demo: API-shaped JSON file")
     ap.add_argument("--env", default=".env")
     a = ap.parse_args(argv)
+
+    if a.cmd == "setup":
+        from .setup_wizard import run
+        run(a.env)
+        return 0
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     s = Settings.load(a.env)

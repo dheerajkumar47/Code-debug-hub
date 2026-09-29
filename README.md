@@ -13,8 +13,10 @@ Official Freelancer API → rule filter → fit score (0-100) → portfolio matc
 ## Quick start
 ```bash
 pip install -r requirements.txt
+python -m bidsmith setup     # paste your tokens (hidden), writes .env
+python -m bidsmith check     # verifies them
 python -m bidsmith demo      # offline demo on sample projects, no keys needed
-pytest -q                    # 18 tests
+pytest -q                    # 19 tests
 ```
 Full setup (Freelancer token, WhatsApp Cloud API, AI key, hosting): **[docs/04-setup.md](docs/04-setup.md)**
 
@@ -40,3 +42,4 @@ Full setup (Freelancer token, WhatsApp Cloud API, AI key, hosting): **[docs/04-s
 - [02: Analysis and requirements](docs/02-analysis-and-requirements.md)
 - [03: Your profile audit and rewrite](docs/03-profile-audit-and-rewrite.md)
 - [04: Setup guide](docs/04-setup.md)
+- [05: **Profile copy-paste pack**](docs/05-PROFILE-COPY-PASTE.md) + images in `profile/images/`
