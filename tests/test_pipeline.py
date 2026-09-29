@@ -106,6 +106,9 @@ def test_crowded_but_great_fit_is_shown_not_lost(make_bot, projects):
     bot.process([crowded], NOW)
     row = bot.store.get_project(555)
     assert row["status"] == "filtered" and row["score"] >= 70
-    _, _, soft = bot.hidden_summary()
+    _, _, soft = bot.hidden_summary(now=NOW)
     assert [r["id"] for r in soft] == [555]
+    old = dataclasses.replace(crowded, id=556, time_submitted=int(NOW - 7 * 86400))
+    bot.process([old], NOW)
+    assert 556 not in [r["id"] for r in bot.hidden_summary(now=NOW)[2]]  # a week old: not worth a bid
     assert bot.draft_anyway(555).startswith("✍")

@@ -142,3 +142,19 @@ def test_rejected_token_means_copy_paste_mode_not_crash():
     assert c.search_active("python") == []      # search still works
     assert c.can_bid() is False and "logged in" in c.auth_error
     assert FreelancerClient(None, transport=httpx.MockTransport(_auth_handler(None))).can_bid() is False
+
+
+def test_search_asks_for_fresh_projects_and_falls_back_if_rejected():
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(dict(req.url.params))
+        if "from_time" in req.url.params:
+            return httpx.Response(400, json={"status": "error", "message": "bad param"})
+        return httpx.Response(200, json={"status": "success", "result": {"projects": [], "users": {}}})
+
+    c = FreelancerClient(None, transport=httpx.MockTransport(handler))
+    assert c.search_active("rag", from_time=123) == []
+    assert seen[0]["from_time"] == "123" and "from_time" not in seen[1]
+    c.search_active("rag", from_time=123)
+    assert "from_time" not in seen[2]          # remembered: no repeated failing calls

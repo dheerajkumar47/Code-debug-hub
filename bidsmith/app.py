@@ -105,11 +105,13 @@ class BidSmith:
 
     def discover(self) -> list[Project]:
         search = self.profile.search
+        since = int(time.time() - float(search.get("max_age_hours", 24) or 24) * 3600)
         found: dict[int, Project] = {}
         for q in search.get("queries", [""]):
             try:
                 for p in self.client.search_active(q, search.get("job_ids", []),
-                                                   search.get("project_types", []), limit=30):
+                                                   search.get("project_types", []), limit=50,
+                                                   from_time=since):
                     found.setdefault(p.id, p)
             except FreelancerError as e:
                 log.error("search '%s' failed: %s", q, e)
@@ -180,7 +182,7 @@ class BidSmith:
 
     SOFT_REASONS = ("bids >", "too old")  # crowded or older: still worth a look if the fit is great
 
-    def hidden_summary(self, limit: int = 8) -> tuple[list[tuple[str, int]], list[dict], list[dict]]:
+    def hidden_summary(self, limit: int = 8, now: float | None = None) -> tuple[list[tuple[str, int]], list[dict], list[dict]]:
         """(top filter reasons, best weak matches, good fits hidden only for being crowded/old)."""
         from collections import Counter
         reasons: Counter = Counter()
@@ -194,8 +196,14 @@ class BidSmith:
                     key = "too old (over 24h)" if key.startswith("too old") else key
                     reasons[key] += 1
         weak = sorted(self.store.list_projects(("low_score",), 500), key=lambda r: r["score"] or 0, reverse=True)
+        now = now or time.time()
+
+        def worth_it(r: dict) -> bool:  # a week old or 150+ bids is not worth a paid bid
+            d = json.loads(r["data"] or "{}")
+            return d.get("bid_count", 0) <= 150 and (now - (d.get("time_submitted") or now)) <= 72 * 3600
+
         soft = [r for r in self.store.list_projects(("filtered",), 1000)
-                if (r["score"] or 0) >= self.threshold() - 10 and r.get("note")
+                if (r["score"] or 0) >= self.threshold() - 10 and r.get("note") and worth_it(r)
                 and all(any(k in part for k in self.SOFT_REASONS) for part in r["note"].split("; "))]
         soft.sort(key=lambda r: r["score"] or 0, reverse=True)
         return reasons.most_common(6), weak[:limit], soft[:limit]

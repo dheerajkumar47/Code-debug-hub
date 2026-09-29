@@ -44,6 +44,7 @@ class FreelancerClient:
         self._auth_options = [{"Freelancer-OAuth-V1": token}, {"Authorization": f"Bearer {token}"}] if token else []
         self._auth: dict | None = None
         self._self_id: int | None = None
+        self._from_time_ok = True  # switched off automatically if the API ever rejects the filter
         self._auth_failed_at = 0.0
         self.auth_error = "" if token else "no Freelancer token"
 
@@ -111,7 +112,7 @@ class FreelancerClient:
             return False
 
     def search_active(self, query: str = "", job_ids: Iterable[int] = (), project_types: Iterable[str] = (),
-                      limit: int = 30, offset: int = 0) -> list[Project]:
+                      limit: int = 30, offset: int = 0, from_time: int | None = None) -> list[Project]:
         params: list[tuple[str, Any]] = [
             ("query", query), ("limit", limit), ("offset", offset),
             ("sort_field", "time_updated"), ("compact", "true"),
@@ -121,7 +122,18 @@ class FreelancerClient:
         ]
         params += [("jobs[]", j) for j in job_ids]
         params += [("project_types[]", t) for t in project_types]
-        result = self._request("GET", "/projects/0.1/projects/active/", auth=False, params=params)
+        if from_time and self._from_time_ok:
+            try:  # only projects posted since from_time → new, uncrowded projects
+                result = self._request("GET", "/projects/0.1/projects/active/", auth=False,
+                                       params=params + [("from_time", int(from_time))])
+            except FreelancerError as e:
+                if " 400" not in str(e) and " 422" not in str(e):
+                    raise
+                log.warning("Freelancer rejected from_time filter; searching without it (%s)", e)
+                self._from_time_ok = False
+                result = self._request("GET", "/projects/0.1/projects/active/", auth=False, params=params)
+        else:
+            result = self._request("GET", "/projects/0.1/projects/active/", auth=False, params=params)
         users = result.get("users") or {}
         return [parse_project(p, users, self.site_url) for p in result.get("projects", [])]
 
