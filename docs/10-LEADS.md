@@ -25,7 +25,18 @@ That's it. (If SerpApi asks to verify a phone number, do it: it's free.)
 *Other option: the official Google Places API (needs a card on Google Cloud). Put `GOOGLE_MAPS_KEY=...` in
 `.env`, add `LEADS_SOURCE=google`, and press Enter when asked for the SerpApi key.*
 
-## PART B: Make the leads (2 minutes)
+## Easiest: the Lead Finder dashboard
+
+Double-click **`leads_dashboard.bat`**. It opens in your browser (http://127.0.0.1:8010):
+- Type the **industry** and **city**, choose **how many leads**.
+- Tick **Search area by area** for many more leads. Type areas (e.g. `Navrangpura, Satellite, Bopal`) or leave
+  them empty and the AI picks the main areas of the city.
+- It shows **how many free searches** a run will use. Click **Find leads** and watch the progress live.
+- Results appear as cards. **Download CSV** gives the sheet, and **Printable report** opens a page to save as PDF (Ctrl+P).
+
+Keep the black window open while you use it. It works on this computer only.
+
+## PART B: Make the leads with leads.bat (2 minutes)
 
 **B1.** Double-click **`update.bat`** (gets the Lead Finder).
 

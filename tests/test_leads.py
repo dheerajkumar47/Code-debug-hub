@@ -107,3 +107,50 @@ def test_template_pitch_is_specific_and_clean():
     t = L.template_pitch(ld, "dental clinic")
     assert t.startswith("Hello Dr. Manish Shah,") and "2,364 Google reviews" in t and "booked by phone" in t
     assert not any(w in t.lower() for w in ("priority", "seamless", "enhance", "through your website"))
+
+
+def test_dashboard_runs_area_search_dedupes_and_serves_downloads(tmp_path, monkeypatch):
+    import time as _t
+    from fastapi.testclient import TestClient
+    from bidsmith import leads_web
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SERPAPI_KEY", "k" * 40)
+    monkeypatch.delenv("LEADS_SOURCE", raising=False)
+    queries = []
+
+    def handler(req: httpx.Request):
+        q = dict(req.url.params)
+        if q.get("engine") == "google_maps":
+            queries.append(q["q"])
+            shared = {"title": "Smile Dental", "place_id": "P1", "data_id": "D1", "phone": "+91 99999 11111",
+                      "rating": 4.5, "reviews": 400}
+            extra = {"title": "Area Clinic " + q["q"][-12:], "place_id": "P" + q["q"], "data_id": "D" + q["q"],
+                     "phone": "+91 98" + str(abs(hash(q["q"])))[:8], "rating": 4.2, "reviews": 120}
+            return httpx.Response(200, json={"local_results": [shared, extra]})
+        if q.get("engine") == "google_maps_reviews":
+            return httpx.Response(200, json={"reviews": [{"snippet": "Nobody picks up the phone"}]})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    app = leads_web.create_app(str(tmp_path / ".env"), llm=L.LLM("none", "") if hasattr(L, "LLM") else None,
+                               client=client)
+    c = TestClient(app)
+    assert c.get("/").status_code == 200 and "Lead Finder" in c.get("/").text
+    assert c.post("/api/estimate", json={"n": 25, "deep": True, "areas": "A, B"}).json()["searches"] == 3 * 2 + 27
+    assert c.post("/api/run", json={"industry": "", "city": "X"}).status_code == 400
+    r = c.post("/api/run", json={"industry": "dental clinic", "city": "Ahmedabad", "n": 10, "deep": True,
+                                 "areas": "Navrangpura, Satellite", "ai": False})
+    assert r.json()["ok"]
+    for _ in range(100):
+        s = c.get("/api/status").json()
+        if not s["running"]:
+            break
+        _t.sleep(0.05)
+    assert not s["error"], s
+    assert queries == ["dental clinic in Ahmedabad", "dental clinic in Navrangpura, Ahmedabad",
+                       "dental clinic in Satellite, Ahmedabad"]
+    names = [x["name"] for x in s["leads"]]
+    assert names.count("Smile Dental") == 1 and len(names) == 4
+    assert c.get("/download/csv").status_code == 200 and "Smile Dental" in c.get("/download/csv").text
+    assert c.get("/download/html").status_code == 200

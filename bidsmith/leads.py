@@ -14,6 +14,7 @@ import html
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -101,6 +102,13 @@ def _serp(client: httpx.Client, params: dict) -> dict:
 def search_serpapi(key: str, query: str, want: int, client: httpx.Client, review_top: int = 12) -> list[dict]:
     """Same Google Maps data through SerpApi (free plan, no card). Returned in the Places-API shape.
     Uses 1 search per 20 businesses + 1 per business whose reviews are read (lowest-rated first)."""
+    places = serp_list(key, query, want, client)
+    serp_reviews(key, places, review_top, client)
+    return places
+
+
+def serp_list(key: str, query: str, want: int, client: httpx.Client) -> list[dict]:
+    """Businesses for one query (1 search per 20 results, max ~120 per query), without reviews."""
     raw, start = [], 0
     while len(raw) < want:
         data = _serp(client, {"engine": "google_maps", "type": "search", "q": query, "hl": "en",
@@ -123,7 +131,11 @@ def search_serpapi(key: str, query: str, want: int, client: httpx.Client, review
             "businessStatus": "CLOSED_PERMANENTLY" if "permanently closed" in str(x.get("open_state", "")).lower()
             else "OPERATIONAL",
             "_data_id": x.get("data_id", ""), "reviews": []})
-    # read reviews (1 search each) for the busiest places only; lowest-rated first = complaints surface
+    return places
+
+
+def serp_reviews(key: str, places: list[dict], review_top: int, client: httpx.Client) -> None:
+    """Read reviews (1 search each) for the busiest places only; lowest-rated first so complaints surface."""
     for p in sorted(places, key=lambda p: p["userRatingCount"], reverse=True)[:review_top]:
         if not p["_data_id"]:
             continue
@@ -134,7 +146,6 @@ def search_serpapi(key: str, query: str, want: int, client: httpx.Client, review
             continue
         p["reviews"] = [{"originalText": {"text": (rv.get("extracted_snippet") or {}).get("original")
                                           or rv.get("snippet") or ""}} for rv in data.get("reviews") or []]
-    return places
 
 
 def pain_quotes(place: dict) -> list[str]:
@@ -318,17 +329,61 @@ Review quotes are real Google reviews; contacts are from each business's own web
 
 
 # ---------------------------------------------------------------- main
-def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: int = 60,
-               client: httpx.Client | None = None, log=print, source: str = "google") -> list[Lead]:
+def queries_for(industry: str, city: str, areas: list[str] | None = None) -> list[str]:
+    return [f"{industry} in {city}"] + [f"{industry} in {a.strip()}, {city}" for a in (areas or []) if a.strip()]
+
+
+def review_budget(n: int) -> int:
+    return min(max(n + 2, 12), 40)
+
+
+def estimate_searches(n: int, areas: list[str] | None = None, per_query: int = 40) -> int:
+    """SerpApi searches one run will use (list pages + review reads)."""
+    return len(queries_for("x", "y", areas)) * -(-per_query // 20) + review_budget(n)
+
+
+def suggest_areas(llm, city: str, k: int = 8) -> list[str]:
+    """Well-known neighbourhoods of a city, used only as extra search terms (a wrong one just finds nothing)."""
+    raw = llm.complete("Reply with a JSON array of strings only.",
+                       f"List {k} well-known commercial neighbourhoods/areas of {city}. Names only.",
+                       max_tokens=200, temperature=0.2)
+    m = re.search(r"\[.*\]", raw, re.S)
+    try:
+        areas = json.loads(m.group(0)) if m else []
+    except ValueError:
+        return []
+    return [str(a).strip() for a in areas if str(a).strip()][:k]
+
+
+def _place_key(p: dict) -> str:
+    return p.get("_data_id") or p.get("id") or p.get("googleMapsUri") or \
+        ((p.get("displayName") or {}).get("text", "") + p.get("internationalPhoneNumber", ""))
+
+
+def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: int = 40,
+               client: httpx.Client | None = None, log=print, source: str = "google",
+               areas: list[str] | None = None) -> list[Lead]:
     own = client is None
     client = client or httpx.Client(timeout=20, headers={"User-Agent": "Mozilla/5.0 (LeadFinder)"})
     try:
-        log(f"Searching Google Maps: {industry} in {city} …")
+        places, seen = [], set()
+        for q in queries_for(industry, city, areas):
+            log(f"Searching Google Maps: {q} …")
+            try:
+                got = serp_list(key, q, scan, client) if source == "serpapi" else search_places(key, q, scan, client)
+            except RuntimeError:
+                if not places:
+                    raise
+                log("  search failed for this area; continuing with what we have")
+                continue
+            new = [p for p in got if p.get("businessStatus", "OPERATIONAL") == "OPERATIONAL"
+                   and _place_key(p) not in seen]
+            seen.update(_place_key(p) for p in new)
+            places += new
+            log(f"  +{len(new)} new businesses (total {len(places)})")
         if source == "serpapi":
-            places = search_serpapi(key, f"{industry} in {city}", min(scan, 40), client, review_top=max(n + 2, 12))
-            places = [p for p in places if p.get("businessStatus") == "OPERATIONAL"]
-        else:
-            places = search_places(key, f"{industry} in {city}", scan, client)
+            log(f"Reading reviews of the {min(review_budget(n), len(places))} busiest …")
+            serp_reviews(key, places, review_budget(n), client)
         log(f"Found {len(places)} open businesses. Checking reviews and websites …")
         leads = drop_unfit([to_lead(p) for p in places])
         if len(leads) < len(places):
@@ -337,19 +392,28 @@ def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: 
         log(f"  {pain} have reviews complaining about calls")
         # check websites for the most promising ones first (review pain + busy)
         leads.sort(key=lambda x: (len(x.pain_quotes), x.reviews_count), reverse=True)
-        for ld in leads[: max(n * 2, 20)]:
+        batch = leads[: min(max(n + 10, 20), 120)]
+
+        def site(ld: Lead) -> None:
             ld.has_online_booking, ld.emails, ld.decision_maker = check_website(ld.website, client)
+
+        with ThreadPoolExecutor(8) as pool:
+            list(pool.map(site, batch))
         for ld in leads:
             ld.score, ld.why = rule_score(ld)
         leads.sort(key=lambda x: x.score, reverse=True)
         top = leads[:n]
         log(f"Writing personalised messages for the top {len(top)} …")
-        for ld in top:
+
+        def pitch(ld: Lead) -> None:
             try:
                 ld.pitch = ai_pitch(llm, ld, industry, city) if llm is not None else ""
             except Exception as ex:  # AI busy → safe template, never block the run
                 log(f"  AI unavailable for {ld.name} ({ex.__class__.__name__}); using template")
             ld.pitch = ld.pitch or template_pitch(ld, industry)
+
+        with ThreadPoolExecutor(4) as pool:
+            list(pool.map(pitch, top))
         log(f"Done: scanned {len(places)} · fit {len(leads)} · delivered top {len(top)}")
         return top
     finally:
