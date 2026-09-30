@@ -118,3 +118,17 @@ def test_generic_automation_project_is_not_a_match(profile):
                                  description="Calibrate a camera system for precise measurement.",
                                  skills=["Computer Vision", "OpenCV", "Python"], bid_count=3)
     assert heuristic_score(vision, profile, PortfolioIndex(profile.portfolio), NOW).score >= 60
+
+
+def test_commission_only_sales_job_is_excluded(profile):
+    sales = _real_style_project(
+        title="Grow with CallMate AI",
+        description="CallMate AI – Client Acquisition Partner. AI Voice Receptionist, AI WhatsApp Automation. "
+                    "This is a performance-based opportunity. There is no upfront investment required. "
+                    "Commission-Based Partnership: you receive your agreed commission.",
+        skills=["Artificial Intelligence", "Sales", "Lead Generation"])
+    ok, why = rule_filter(sales, profile, NOW)
+    assert not ok and "excluded keyword" in why[0], why
+    dev = _real_style_project(title="Build an AI voice receptionist",
+                              description="Twilio + OpenAI voice agent that books appointments for our clinic.")
+    assert rule_filter(dev, profile, NOW)[0]

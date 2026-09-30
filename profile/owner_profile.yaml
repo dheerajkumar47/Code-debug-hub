@@ -145,7 +145,11 @@ search:
   blocked_countries: []
   allowed_currencies: []            # empty = all
   exclude_keywords: ["wordpress theme", "logo design", "data entry only", "homework", "exam",
-                     "thesis writing", "adult content", "casino", "crypto pump"]   # whole words only
+                     "thesis writing", "adult content", "casino", "crypto pump",
+                     # sales / commission-only jobs dressed in AI words (not development work)
+                     "commission only", "commission-only", "commission based", "commission-based",
+                     "client acquisition", "sales partner", "sales partners", "sales representative",
+                     "appointment setter", "no upfront investment"]   # whole words only
   skip_nda: true            # never auto-accept NDAs; review manually
 
 style:
