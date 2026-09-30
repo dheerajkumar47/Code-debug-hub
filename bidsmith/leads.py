@@ -2,8 +2,8 @@
 
     python -m bidsmith leads            (or double-click leads.bat)
 
-Uses the official Google Places API (New) — needs GOOGLE_MAPS_KEY in .env — and the AI keys the bot
-already has. Writes data/leads/<industry>-<city>.csv (opens in Excel / Google Sheets) and a .html report.
+Data source: SerpApi (Google Maps data, free plan, no card — SERPAPI_KEY) or the official Google Places
+API (New) (GOOGLE_MAPS_KEY, needs billing). Uses the AI keys the bot already has. Writes data/leads/<industry>-<city>.csv (opens in Excel / Google Sheets) and a .html report.
 Nothing is invented: every lead, phone, review quote and email comes from Google Maps or the business's
 own website.
 """
@@ -84,6 +84,56 @@ def search_places(key: str, query: str, want: int, client: httpx.Client) -> list
             break
         time.sleep(2)  # the next page needs a moment to become valid
     return out[:want]
+
+
+SERPAPI_URL = "https://serpapi.com/search.json"
+
+
+def _serp(client: httpx.Client, params: dict) -> dict:
+    r = client.get(SERPAPI_URL, params=params)
+    data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    if r.status_code != 200 or data.get("error"):
+        raise RuntimeError(f"SerpApi said {r.status_code}: {data.get('error') or r.text[:300]}")
+    return data
+
+
+def search_serpapi(key: str, query: str, want: int, client: httpx.Client, review_top: int = 12) -> list[dict]:
+    """Same Google Maps data through SerpApi (free plan, no card). Returned in the Places-API shape.
+    Uses 1 search per 20 businesses + 1 per business whose reviews are read (lowest-rated first)."""
+    raw, start = [], 0
+    while len(raw) < want:
+        data = _serp(client, {"engine": "google_maps", "type": "search", "q": query, "hl": "en",
+                              "start": start, "api_key": key})
+        page = data.get("local_results") or []
+        raw += page
+        if len(page) < 20:
+            break
+        start += 20
+    places = []
+    for x in raw[:want]:
+        hours = x.get("operating_hours") or {}
+        places.append({
+            "displayName": {"text": x.get("title", "")}, "formattedAddress": x.get("address", ""),
+            "internationalPhoneNumber": x.get("phone", ""), "websiteUri": x.get("website", ""),
+            "googleMapsUri": (f"https://www.google.com/maps/place/?q=place_id:{x['place_id']}"
+                              if x.get("place_id") else ""),
+            "rating": x.get("rating") or 0, "userRatingCount": x.get("reviews") or 0,
+            "regularOpeningHours": {"weekdayDescriptions": [f"{d.title()}: {h}" for d, h in hours.items()]},
+            "businessStatus": "CLOSED_PERMANENTLY" if "permanently closed" in str(x.get("open_state", "")).lower()
+            else "OPERATIONAL",
+            "_data_id": x.get("data_id", ""), "reviews": []})
+    # read reviews (1 search each) for the busiest places only; lowest-rated first = complaints surface
+    for p in sorted(places, key=lambda p: p["userRatingCount"], reverse=True)[:review_top]:
+        if not p["_data_id"]:
+            continue
+        try:
+            data = _serp(client, {"engine": "google_maps_reviews", "data_id": p["_data_id"], "hl": "en",
+                                  "sort_by": "ratingLow", "api_key": key})
+        except RuntimeError:
+            continue
+        p["reviews"] = [{"originalText": {"text": (rv.get("extracted_snippet") or {}).get("original")
+                                          or rv.get("snippet") or ""}} for rv in data.get("reviews") or []]
+    return places
 
 
 def pain_quotes(place: dict) -> list[str]:
@@ -232,12 +282,16 @@ Review quotes are real Google reviews; contacts are from each business's own web
 
 # ---------------------------------------------------------------- main
 def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: int = 60,
-               client: httpx.Client | None = None, log=print) -> list[Lead]:
+               client: httpx.Client | None = None, log=print, source: str = "google") -> list[Lead]:
     own = client is None
     client = client or httpx.Client(timeout=20, headers={"User-Agent": "Mozilla/5.0 (LeadFinder)"})
     try:
         log(f"Searching Google Maps: {industry} in {city} …")
-        places = search_places(key, f"{industry} in {city}", scan, client)
+        if source == "serpapi":
+            places = search_serpapi(key, f"{industry} in {city}", min(scan, 40), client, review_top=max(n + 2, 12))
+            places = [p for p in places if p.get("businessStatus") == "OPERATIONAL"]
+        else:
+            places = search_places(key, f"{industry} in {city}", scan, client)
         log(f"Found {len(places)} open businesses. Checking reviews and websites …")
         leads = [to_lead(p) for p in places]
         # check websites for the most promising ones first (review pain + busy)
@@ -271,21 +325,28 @@ def run_cli(env_file: str = ".env") -> int:
     import os
 
     s = Settings.load(env_file)
-    key = os.environ.get("GOOGLE_MAPS_KEY", "").strip()
+    serp = os.environ.get("SERPAPI_KEY", "").strip()
+    gkey = os.environ.get("GOOGLE_MAPS_KEY", "").strip()
+    if not serp and not os.environ.get("LEADS_SOURCE", "") == "google":
+        serp = input("SerpApi key (free, see docs/10-LEADS.md" + (", or press Enter to use Google" if gkey else "")
+                     + "): ").strip()
+        if serp:
+            if len(serp) < 30:
+                print("That doesn't look like a SerpApi key (it is a long code from serpapi.com/manage-api-key).")
+                return 1
+            with open(env_file, "a", encoding="utf-8") as f:
+                f.write(f"\nSERPAPI_KEY={serp}\n")
+            print("Saved in .env — you won't be asked again.\n")
+    source, key = ("serpapi", serp) if serp else ("google", gkey)
     if not key:
-        key = input("Google Maps API key (see docs/10-LEADS.md, starts with AIza): ").strip()
-        if not key.startswith("AIza"):
-            print("That doesn't look like a Google API key.")
-            return 1
-        with open(env_file, "a", encoding="utf-8") as f:
-            f.write(f"\nGOOGLE_MAPS_KEY={key}\n")
-        print("Saved in .env — you won't be asked again.\n")
+        print("No key. Follow docs/10-LEADS.md Part A to get a free SerpApi key.")
+        return 1
     industry = input("Industry (e.g. dental clinic, salon, hotel): ").strip() or "dental clinic"
     city = input("City (e.g. Ahmedabad): ").strip() or "Ahmedabad"
     n = int(input("How many leads? [10]: ").strip() or 10)
     llm = build_llm(s)
     try:
-        leads = find_leads(key, industry, city, n, llm if getattr(llm, "enabled", False) else None)
+        leads = find_leads(key, industry, city, n, llm if getattr(llm, "enabled", False) else None, source=source)
     except RuntimeError as ex:
         print(f"\n❌ {ex}\nSee docs/10-LEADS.md → 'If it fails'.")
         return 1

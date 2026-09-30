@@ -11,29 +11,26 @@ Everything comes from Google Maps or the business's own website. Nothing is made
 
 ---
 
-## PART A: Get a Google Maps key (one time, 5 minutes)
+## PART A: Get a free SerpApi key (one time, 3 minutes, no card)
 
-**A1.** Open **https://console.cloud.google.com** → log in with your Google account.
+SerpApi gives the same Google Maps data (phone, website, rating, reviews). Free plan: **250 searches a month**,
+no card. One 10-lead demo uses about **13 searches**.
 
-**A2.** Top bar → project dropdown → **New project** → name `leadfinder` → **Create** → select it.
+**A1.** Open **https://serpapi.com/users/sign_up** → sign up with your email (or Google login) → verify your email.
 
-**A3.** Left menu **Billing** → link a billing account (add your card).
-Google gives a **free monthly allowance**. A 10-lead demo uses only about 3 searches, so it costs **$0**.
+**A2.** Open **https://serpapi.com/manage-api-key** → click the copy icon next to **Your Private API Key**.
 
-**A4.** Search bar at the top → type **Places API (New)** → open it → **Enable**.
+That's it. (If SerpApi asks to verify a phone number, do it: it's free.)
 
-**A5.** Left menu **APIs & Services → Credentials** → **+ Create credentials → API key** → **copy** it (starts with `AIza`).
-
-**A6.** Click the new key → **API restrictions → Restrict key** → tick **Places API (New)** → **Save**.
-
-(Safety: optional, but good. **Billing → Budgets & alerts → Create budget → $5** sends you an email if anything is ever charged.)
+*Other option: the official Google Places API (needs a card on Google Cloud). Put `GOOGLE_MAPS_KEY=...` in
+`.env`, add `LEADS_SOURCE=google`, and press Enter when asked for the SerpApi key.*
 
 ## PART B: Make the leads (2 minutes)
 
 **B1.** Double-click **`update.bat`** (gets the Lead Finder).
 
 **B2.** Double-click **`leads.bat`**.
-- First time only: paste your Google Maps key → Enter. It's saved in `.env`.
+- First time only: paste your **SerpApi key** → Enter. It's saved in `.env`.
 - **Industry** → e.g. `dental clinic` → Enter
 - **City** → e.g. `Ahmedabad` → Enter
 - **How many leads?** → `10` → Enter
@@ -52,6 +49,7 @@ Google gives a **free monthly allowance**. A 10-lead demo uses only about 3 sear
 
 | Message | Fix |
 |---|---|
-| `Google Maps said 403` | Places API (New) isn't enabled (A4), or the key is restricted to the wrong API (A6), or billing isn't linked (A3). |
-| `Google Maps said 400` | The key is wrong. Delete the `GOOGLE_MAPS_KEY=` line in `.env` and run `leads.bat` again. |
+| `SerpApi said 401` / `Invalid API key` | Key copied wrong. Open `.env` in Notepad, delete the `SERPAPI_KEY=` line, save, run `leads.bat` again. |
+| `run out of searches` | Free plan used up for this month. Wait for next month or make a new account. |
+| `Google Maps said 403` | (Google option only) Places API (New) not enabled or billing not linked. |
 | Messages look basic | The AI was busy, so the safe template was used. Just run it again. |

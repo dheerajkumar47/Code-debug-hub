@@ -56,3 +56,32 @@ def test_hinglish_call_complaints_are_detected():
     p = _place(9, ["Doctor accha hai but phone nahi uthate, 3 baar try kiya", "Call receive nahi karte"])
     assert len(L.pain_quotes(p)) == 2
     assert L.pain_quotes(_place(8, ["Very good treatment, nice staff"])) == []
+
+
+def test_serpapi_source_maps_to_same_pipeline():
+    calls = []
+
+    def handler(req: httpx.Request):
+        q = dict(req.url.params)
+        if req.url.host == "serpapi.com":
+            calls.append(q["engine"])
+            if q["engine"] == "google_maps":
+                return httpx.Response(200, json={"local_results": [
+                    {"title": "Smile Dental", "place_id": "P1", "data_id": "D1", "address": "Navrangpura",
+                     "phone": "+91 99999 11111", "rating": 4.1, "reviews": 250,
+                     "operating_hours": {"sunday": "10 AM–1 PM"}},
+                    {"title": "Old Clinic", "place_id": "P2", "data_id": "D2", "reviews": 5,
+                     "open_state": "Permanently closed"}]})
+            assert q["sort_by"] == "ratingLow"
+            return httpx.Response(200, json={"reviews": [
+                {"snippet": "Phone nahi uthate, very hard to get appointment"}]})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    out = L.find_leads("s" * 40, "dental clinic", "Ahmedabad", n=5, client=client, log=lambda *_: None,
+                       source="serpapi")
+    assert [x.name for x in out] == ["Smile Dental"]
+    ld = out[0]
+    assert ld.pain_quotes and "place_id:P1" in ld.maps_url and ld.reviews_count == 250
+    assert "open long hours / weekends" in ld.why
+    assert calls.count("google_maps") == 1
