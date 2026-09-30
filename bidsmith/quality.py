@@ -106,6 +106,13 @@ def check(text: str, p: Project, profile_corpus: str, style: dict,
         if url.lower() not in allowed:
             issues.append(f"unknown link {url}")
 
+    # Experience claims ("5+ years", "10 years of PHP") must come from the profile, never from the brief:
+    # a client asking for "5+ years" is not proof that you have it.
+    prof = profile_corpus.lower()
+    for m in re.finditer(r"\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b", low):
+        if not re.search(rf"\b{m.group(1)}\s*\+?\s*(?:years?|yrs?)\b", prof):
+            issues.append(f"unsupported experience claim '{m.group(0)}' (not in your profile)")
+
     if "?" not in text:
         warnings.append("no clarifying question")
 

@@ -132,3 +132,14 @@ def test_commission_only_sales_job_is_excluded(profile):
     dev = _real_style_project(title="Build an AI voice receptionist",
                               description="Twilio + OpenAI voice agent that books appointments for our clinic.")
     assert rule_filter(dev, profile, NOW)[0]
+
+
+def test_experience_years_copied_from_brief_are_rejected(profile):
+    from bidsmith import quality
+    p = _real_style_project(title="PHP developer with AI", description="Need 5+ years of PHP experience and OpenAI API.")
+    text = ("You need PHP with AI chatbot features on your existing app. My PHP experience is 5+ years, "
+            "AI integration with OpenAI API. Which framework do you use?")
+    r = quality.check(text, p, "BS Software Engineering. AI Engineer.", {"min_words": 5, "max_words": 300})
+    assert any("experience claim" in i for i in r.issues), r.issues
+    ok = quality.check(text.replace("My PHP experience is 5+ years, AI", "AI"), p, "", {"min_words": 5, "max_words": 300})
+    assert not any("experience claim" in i for i in ok.issues)
