@@ -78,7 +78,7 @@ def run_check(s: Settings) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="bidsmith")
-    ap.add_argument("cmd", choices=["setup", "serve", "run-once", "demo", "check", "leads", "leads-ui"])
+    ap.add_argument("cmd", choices=["setup", "serve", "run-once", "demo", "check"])
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--file", default="tests/fixtures/projects.json", help="demo: API-shaped JSON file")
@@ -89,12 +89,6 @@ def main(argv: list[str] | None = None) -> int:
         from .setup_wizard import run
         run(a.env)
         return 0
-    if a.cmd == "leads":
-        from .leads import run_cli
-        return run_cli(a.env)
-    if a.cmd == "leads-ui":
-        from .leads_web import serve as leads_serve
-        return leads_serve(a.env)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
     for noisy in ("httpx", "httpcore", "uvicorn.access"):  # keep the black window readable

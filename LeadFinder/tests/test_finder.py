@@ -2,7 +2,7 @@ import json
 
 import httpx
 
-from bidsmith import leads as L
+from leadfinder import finder as L
 
 
 def _place(i, reviews=(), count=50, site=""):
@@ -112,7 +112,7 @@ def test_template_pitch_is_specific_and_clean():
 def test_dashboard_runs_area_search_dedupes_and_serves_downloads(tmp_path, monkeypatch):
     import time as _t
     from fastapi.testclient import TestClient
-    from bidsmith import leads_web
+    from leadfinder import web as leads_web
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SERPAPI_KEY", "k" * 40)
@@ -133,7 +133,7 @@ def test_dashboard_runs_area_search_dedupes_and_serves_downloads(tmp_path, monke
         return httpx.Response(404)
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    app = leads_web.create_app(str(tmp_path / ".env"), llm=L.LLM("none", "") if hasattr(L, "LLM") else None,
+    app = leads_web.create_app(str(tmp_path / ".env"), llm=False,
                                client=client)
     c = TestClient(app)
     assert c.get("/").status_code == 200 and "Lead Finder" in c.get("/").text

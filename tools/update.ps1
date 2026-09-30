@@ -1,4 +1,5 @@
-# BidSmith updater. The repo is private, so the download goes through your browser (already logged in to GitHub).
+# BidSmith updater. Downloads the latest version directly (falls back to your browser if that fails).
+# The LeadFinder folder is a separate tool with its own update.bat, so it is not copied here.
 # Keeps: .env (your keys), data\ (history), .venv\ (installed libraries).
 param([string]$BotDir = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
@@ -9,11 +10,17 @@ try { $downloads = (New-Object -ComObject Shell.Application).Namespace('shell:Do
 if (-not $downloads -or -not (Test-Path $downloads)) { $downloads = Join-Path $env:USERPROFILE 'Downloads' }
 
 $started = Get-Date
-Write-Host "Opening the download in your browser (you are logged in to GitHub there)..."
-Start-Process $url
-Write-Host "Waiting for the ZIP in $downloads  (up to 3 minutes)..."
-
 $zip = $null
+try {
+    Write-Host "Downloading the latest BidSmith..."
+    $direct = Join-Path $env:TEMP 'bidsmith_latest.zip'
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $direct
+    $zip = $direct
+} catch {
+    Write-Host "Opening the download in your browser instead..."
+    Start-Process $url
+    Write-Host "Waiting for the ZIP in $downloads  (up to 3 minutes)..."
+}
 for ($i = 0; $i -lt 180 -and -not $zip; $i++) {
     Start-Sleep -Seconds 1
     $cand = Get-ChildItem -Path $downloads -Filter $name -File -ErrorAction SilentlyContinue |
@@ -33,7 +40,7 @@ $tmp = Join-Path $env:TEMP 'bidsmith_update'
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 Expand-Archive -Path $zip -DestinationPath $tmp -Force
 $src = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName
-robocopy $src $BotDir /E /NFL /NDL /NJH /NJS /XD .venv data /XF .env keys.txt update.bat | Out-Null
+robocopy $src $BotDir /E /NFL /NDL /NJH /NJS /XD .venv data LeadFinder /XF .env keys.txt update.bat | Out-Null
 if ($LASTEXITCODE -ge 8) { Write-Host "Copy failed (robocopy code $LASTEXITCODE)."; exit 1 }
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

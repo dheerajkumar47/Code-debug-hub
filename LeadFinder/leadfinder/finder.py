@@ -1,6 +1,6 @@
 """Lead finder: real businesses from Google Maps → call-pain evidence → AI score + personalised pitch.
 
-    python -m bidsmith leads            (or double-click leads.bat)
+    python -m leadfinder cli            (the dashboard is start.bat)
 
 Data source: SerpApi (Google Maps data, free plan, no card — SERPAPI_KEY) or the official Google Places
 API (New) (GOOGLE_MAPS_KEY, needs billing). Uses the AI keys the bot already has. Writes data/leads/<industry>-<city>.csv (opens in Excel / Google Sheets) and a .html report.
@@ -426,15 +426,15 @@ def slug(s: str) -> str:
 
 
 def run_cli(env_file: str = ".env") -> int:
-    from .app import build_llm
-    from .config import Settings
     import os
+    from dotenv import load_dotenv
+    from .ai import build_llm
 
-    s = Settings.load(env_file)
+    load_dotenv(env_file)
     serp = os.environ.get("SERPAPI_KEY", "").strip()
     gkey = os.environ.get("GOOGLE_MAPS_KEY", "").strip()
     if not serp and not os.environ.get("LEADS_SOURCE", "") == "google":
-        serp = input("SerpApi key (free, see docs/10-LEADS.md" + (", or press Enter to use Google" if gkey else "")
+        serp = input("SerpApi key (free, see README.md" + (", or press Enter to use Google" if gkey else "")
                      + "): ").strip()
         if serp:
             if len(serp) < 30:
@@ -445,16 +445,16 @@ def run_cli(env_file: str = ".env") -> int:
             print("Saved in .env — you won't be asked again.\n")
     source, key = ("serpapi", serp) if serp else ("google", gkey)
     if not key:
-        print("No key. Follow docs/10-LEADS.md Part A to get a free SerpApi key.")
+        print("No key. Follow README.md Part A to get a free SerpApi key.")
         return 1
     industry = input("Industry (e.g. dental clinic, salon, hotel): ").strip() or "dental clinic"
     city = input("City (e.g. Ahmedabad): ").strip() or "Ahmedabad"
     n = int(input("How many leads? [10]: ").strip() or 10)
-    llm = build_llm(s)
+    llm = build_llm()
     try:
-        leads = find_leads(key, industry, city, n, llm if getattr(llm, "enabled", False) else None, source=source)
+        leads = find_leads(key, industry, city, n, llm, source=source)
     except RuntimeError as ex:
-        print(f"\n❌ {ex}\nSee docs/10-LEADS.md → 'If it fails'.")
+        print(f"\n❌ {ex}\nSee README.md → 'If it fails'.")
         return 1
     out = Path("data/leads")
     out.mkdir(parents=True, exist_ok=True)

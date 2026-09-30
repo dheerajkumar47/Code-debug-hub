@@ -1,8 +1,8 @@
 """Lead Finder dashboard: type industry + city, click Find, watch progress, get real leads.
 
-    python -m bidsmith leads-ui        (or double-click leads_dashboard.bat)
+    python -m leadfinder               (or double-click start.bat)
 
-Runs only on this computer (http://127.0.0.1:8010). Uses the same keys as leads.bat (.env).
+Runs only on this computer (http://127.0.0.1:8010). Keys come from .env in this folder.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
-from . import leads as L
+from . import finder as L
 
 OUT = Path("data/leads")
 
@@ -40,11 +40,11 @@ class Job:
 
 
 def create_app(env_file: str = ".env", llm=None, client=None) -> FastAPI:
-    from .app import build_llm
-    from .config import Settings
+    from dotenv import load_dotenv
+    from .ai import build_llm
 
-    settings = Settings.load(env_file)
-    llm = llm if llm is not None else build_llm(settings)
+    load_dotenv(env_file)
+    llm = llm if llm is not None else build_llm()
     job = Job()
     app = FastAPI(title="Lead Finder")
 
