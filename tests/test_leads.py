@@ -50,3 +50,9 @@ def test_outputs(tmp_path):
     assert "Outreach message" in (tmp_path / "x.csv").read_text(encoding="utf-8-sig")
     page = (tmp_path / "x.html").read_text(encoding="utf-8")
     assert "A &amp; B &lt;Clinic&gt;" in page and "prefers-color-scheme:dark" in page
+
+
+def test_hinglish_call_complaints_are_detected():
+    p = _place(9, ["Doctor accha hai but phone nahi uthate, 3 baar try kiya", "Call receive nahi karte"])
+    assert len(L.pain_quotes(p)) == 2
+    assert L.pain_quotes(_place(8, ["Very good treatment, nice staff"])) == []

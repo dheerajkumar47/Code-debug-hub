@@ -36,6 +36,9 @@ CALL_PAIN = [
     r"|call|connect)",
     r"(on hold|kept waiting on (the )?(phone|call)|call(ed)? (many|multiple|several|\d+) times)",
     r"(no response|no reply|never (called|call) back|didn'?t call back|no call ?back)",
+    # Hinglish (common in Indian reviews): "phone nahi uthate", "call receive nahi karte"
+    r"(phone|call|fone)\s+(koi\s+)?(nahi|nahin|nhi|na)\s+(uthat|uthay|uthaa|utha|lagt|lag|receive)",
+    r"(phone|call)\s+(receive|pick)\s+(nahi|nahin|nhi)",
 ]
 BOOKING_HINTS = ("calendly", "practo", "book now", "book an appointment", "book appointment", "online booking",
                  "schedule an appointment", "booking", "appointment form", "zocdoc", "fresha", "setmore")
