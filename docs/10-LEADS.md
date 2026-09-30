@@ -50,6 +50,6 @@ That's it. (If SerpApi asks to verify a phone number, do it: it's free.)
 | Message | Fix |
 |---|---|
 | `SerpApi said 401` / `Invalid API key` | Key copied wrong. Open `.env` in Notepad, delete the `SERPAPI_KEY=` line, save, run `leads.bat` again. |
-| `run out of searches` | Free plan used up for this month. Wait for next month or make a new account. |
+| `run out of searches` | Free plan used up for this month. It resets next month. For client work, the client's own SerpApi plan pays for searches. |
 | `Google Maps said 403` | (Google option only) Places API (New) not enabled or billing not linked. |
 | Messages look basic | The AI was busy, so the safe template was used. Just run it again. |
