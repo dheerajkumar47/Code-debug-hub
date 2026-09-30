@@ -85,3 +85,25 @@ def test_serpapi_source_maps_to_same_pipeline():
     assert ld.pain_quotes and "place_id:P1" in ld.maps_url and ld.reviews_count == 250
     assert "open long hours / weekends" in ld.why
     assert calls.count("google_maps") == 1
+
+
+def test_review_about_doctor_not_calls_is_not_call_pain():
+    p = _place(7, ["Stay alert from such unethical doctors. His no response proves that he isn't guilty"])
+    assert L.pain_quotes(p) == []
+    assert L.pain_quotes(_place(6, ["No response on the phone for two days"]))
+
+
+def test_chains_and_shared_call_centre_numbers_are_dropped():
+    a = L.Lead("Clove Dental - Bodakdev", "", "+91 40 3824 5727", "", "", 4.8, 800)
+    b = L.Lead("Some Branch", "", "+91 40 3824 5727", "", "", 4.8, 700)
+    c = L.Lead("Aashu Dental", "", "+91 98251 58578", "", "", 4.9, 2364)
+    d = L.Lead("No Phone Clinic", "", "", "", "", 5, 6000)
+    assert [x.name for x in L.drop_unfit([a, b, c, d])] == ["Aashu Dental"]
+
+
+def test_template_pitch_is_specific_and_clean():
+    ld = L.Lead("Aashu Dental", "", "+91", "", "", 4.9, 2364, decision_maker="Dr. Manish Shah",
+                has_online_booking=False)
+    t = L.template_pitch(ld, "dental clinic")
+    assert t.startswith("Hello Dr. Manish Shah,") and "2,364 Google reviews" in t and "booked by phone" in t
+    assert not any(w in t.lower() for w in ("priority", "seamless", "enhance", "through your website"))

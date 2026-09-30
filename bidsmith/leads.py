@@ -35,7 +35,8 @@ CALL_PAIN = [
     r"(couldn'?t|could not|can'?t|cannot|unable to|hard to|difficult to|impossible to) (reach|get through|contact"
     r"|call|connect)",
     r"(on hold|kept waiting on (the )?(phone|call)|call(ed)? (many|multiple|several|\d+) times)",
-    r"(no response|no reply|never (called|call) back|didn'?t call back|no call ?back)",
+    r"((no response|no reply|no answer) (on|to|from) (the |my )?(phone|call|calls|number|whatsapp)"
+    r"|never (called|call) back|didn'?t call back|no call ?back|(didn'?t|did not|never) return(ed)? (my )?calls?)",
     # Hinglish (common in Indian reviews): "phone nahi uthate", "call receive nahi karte"
     r"(phone|call|fone)\s+(koi\s+)?(nahi|nahin|nhi|na)\s+(uthat|uthay|uthaa|utha|lagt|lag|receive)",
     r"(phone|call)\s+(receive|pick)\s+(nahi|nahin|nhi)",
@@ -185,6 +186,27 @@ def to_lead(p: dict) -> Lead:
                 pain_quotes=pain_quotes(p), hours=hours)
 
 
+# National chains have central call centres: not a lead for a small AI-receptionist startup.
+CHAINS = ("clove dental", "sabka dentist", "apollo white", "apollo dental", "32 pearls", "dentzz", "floss dental",
+          "partha dental", "fms dental", "smile studio by", "aspen dental", "my dentist", "bupa dental")
+
+
+def drop_unfit(leads: list[Lead]) -> list[Lead]:
+    """Remove chains (by name or a phone shared by several branches) and places with no phone to call."""
+    phones: dict[str, int] = {}
+    for ld in leads:
+        key = re.sub(r"\D", "", ld.phone)[-10:]
+        if key:
+            phones[key] = phones.get(key, 0) + 1
+    out = []
+    for ld in leads:
+        key = re.sub(r"\D", "", ld.phone)[-10:]
+        if not key or phones[key] > 1 or any(c in ld.name.lower() for c in CHAINS):
+            continue
+        out.append(ld)
+    return out
+
+
 # ---------------------------------------------------------------- scoring + pitch
 def rule_score(ld: Lead) -> tuple[int, str]:
     s, why = 0, []
@@ -210,26 +232,41 @@ def rule_score(ld: Lead) -> tuple[int, str]:
 
 SYSTEM = """You write short cold-outreach messages for CallMate AI, an AI voice receptionist that answers every
 call 24/7, books appointments, answers common questions and forwards urgent calls to staff.
-Rules: use ONLY the facts given; quote at most one short review phrase if given; never invent numbers,
-names or problems; 60-90 words; warm, respectful, plain English; one clear call to action: a free
-10-minute demo. No subject line, no emojis. Sign off as: Team CallMate AI."""
+Structure: 1) one specific observation about THIS business from the facts (e.g. how many patients review
+them, that booking happens by phone, a review about calls); 2) the problem it causes (calls missed while
+staff are busy with patients or after hours); 3) what CallMate AI does, in one sentence; 4) ask for a free
+10-minute demo.
+Rules: use ONLY the facts given; quote at most one short review phrase, only if it is about calls; never
+invent numbers, names or problems; never say CallMate books through their website; 60-90 words; warm,
+plain English. Never use: "priority", "commitment", "seamless", "enhance", "streamline", "we understand".
+No subject line, no emojis. Sign off as: Team CallMate AI."""
 
 
 def ai_pitch(llm, ld: Lead, industry: str, city: str) -> str:
     facts = {"business": ld.name, "industry": industry, "city": city, "rating": ld.rating,
              "google_reviews": ld.reviews_count, "review_complaints_about_calls": ld.pain_quotes[:2],
-             "online_booking_on_website": ld.has_online_booking, "contact_person": ld.decision_maker}
+             "online_booking_on_website": ld.has_online_booking, "contact_person": ld.decision_maker,
+             "signals": ld.why}
     return llm.complete(SYSTEM, "Write the message for this business:\n" + json.dumps(facts, ensure_ascii=False),
                         max_tokens=300, temperature=0.5).strip()
 
 
 def template_pitch(ld: Lead, industry: str) -> str:
-    hook = (f"A few of your Google reviews mention it can be hard to get through on the phone"
-            if ld.pain_quotes else f"Busy {industry} like yours often miss calls during peak hours")
+    if ld.pain_quotes:
+        hook = "A few of your Google reviews mention it can be hard to get through on the phone"
+    elif ld.reviews_count >= 300:
+        hook = (f"With {ld.reviews_count:,} Google reviews, your phone must ring all day, and while your team is "
+                "with patients some of those calls go unanswered")
+    else:
+        hook = f"Busy {industry}s often miss calls while the team is with patients or after hours"
+    if ld.has_online_booking is False:
+        hook += ". Since appointments are booked by phone, each missed call can be a lost patient"
+    else:
+        hook += ", and each missed call can be a lost patient"
     hello = f"Hello {ld.decision_maker}," if ld.decision_maker else f"Hello {ld.name} team,"
-    return (f"{hello}\n\n{hook}, and every missed call can be a lost booking. CallMate AI is an AI receptionist "
-            "that answers every call 24/7, books appointments and answers common questions, and forwards "
-            "urgent calls to your staff.\n\nCould we show you a free 10-minute demo this week?\n\nTeam CallMate AI")
+    return (f"{hello}\n\n{hook}.\n\nCallMate AI is an AI receptionist that answers every call 24/7, books "
+            "appointments, answers common questions and forwards urgent calls to your staff.\n\n"
+            "Could we show you a free 10-minute demo this week?\n\nTeam CallMate AI")
 
 
 # ---------------------------------------------------------------- output
@@ -237,7 +274,7 @@ def write_csv(path: Path, leads: list[Lead]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as f:  # utf-8-sig so Excel shows ₹ and names right
         w = csv.writer(f)
         w.writerow(["Rank", "Score", "Business", "Phone", "Website", "Email", "Decision maker", "Rating",
-                    "Reviews", "Why qualified", "Review evidence", "Online booking", "Address", "Google Maps",
+                    "Reviews", "Why it's a fit", "Review evidence", "Online booking", "Address", "Google Maps",
                     "Outreach message", "Status"])
         for i, ld in enumerate(leads, 1):
             w.writerow([i, ld.score, ld.name, ld.phone, ld.website, ", ".join(ld.emails), ld.decision_maker,
@@ -259,7 +296,7 @@ def write_html(path: Path, leads: list[Lead], industry: str, city: str) -> None:
 <span class="score">{ld.score}</span></div>
 <p class="meta">★ {ld.rating} · {ld.reviews_count} reviews · {e(ld.address)}</p>
 <p class="meta">{contact}{' · ' + links if links else ''}</p>
-<p class="why"><b>Why qualified:</b> {e(ld.why)}</p>{quotes}
+<p class="why"><b>Why it's a fit:</b> {e(ld.why)}</p>{quotes}
 <details><summary>Personalised outreach message</summary><pre>{e(ld.pitch)}</pre></details></article>""")
     path.write_text(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Leads · {e(industry)} · {e(city)}</title>
@@ -274,7 +311,7 @@ font-weight:700}}.meta{{color:var(--mut);margin:4px 0;font-size:14px;overflow-wr
 .why{{margin:10px 0 6px}}blockquote{{margin:6px 0;padding:6px 12px;border-left:3px solid var(--acc);color:var(--mut);
 font-style:italic}}pre{{white-space:pre-wrap;font:inherit;background:var(--bg);padding:10px;border-radius:8px}}
 summary{{cursor:pointer;color:var(--acc);margin-top:8px}}</style></head><body><div class="wrap">
-<h1>Qualified leads: {e(industry)} in {e(city)}</h1>
+<h1>Leads: {e(industry.title())} in {e(city.title())}</h1>
 <p class="sub">{len(leads)} businesses from Google Maps, ranked by how much they need an AI receptionist.
 Review quotes are real Google reviews; contacts are from each business's own website.</p>
 {''.join(cards)}</div></body></html>""", encoding="utf-8")
@@ -293,7 +330,7 @@ def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: 
         else:
             places = search_places(key, f"{industry} in {city}", scan, client)
         log(f"Found {len(places)} open businesses. Checking reviews and websites …")
-        leads = [to_lead(p) for p in places]
+        leads = drop_unfit([to_lead(p) for p in places])
         # check websites for the most promising ones first (review pain + busy)
         leads.sort(key=lambda x: (len(x.pain_quotes), x.reviews_count), reverse=True)
         for ld in leads[: max(n * 2, 20)]:
