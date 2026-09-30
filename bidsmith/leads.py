@@ -331,6 +331,10 @@ def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: 
             places = search_places(key, f"{industry} in {city}", scan, client)
         log(f"Found {len(places)} open businesses. Checking reviews and websites …")
         leads = drop_unfit([to_lead(p) for p in places])
+        if len(leads) < len(places):
+            log(f"  Removed {len(places) - len(leads)} chains / duplicate numbers / listings without a phone")
+        pain = sum(1 for x in leads if x.pain_quotes)
+        log(f"  {pain} have reviews complaining about calls")
         # check websites for the most promising ones first (review pain + busy)
         leads.sort(key=lambda x: (len(x.pain_quotes), x.reviews_count), reverse=True)
         for ld in leads[: max(n * 2, 20)]:
@@ -346,6 +350,7 @@ def find_leads(key: str, industry: str, city: str, n: int = 10, llm=None, scan: 
             except Exception as ex:  # AI busy → safe template, never block the run
                 log(f"  AI unavailable for {ld.name} ({ex.__class__.__name__}); using template")
             ld.pitch = ld.pitch or template_pitch(ld, industry)
+        log(f"Done: scanned {len(places)} · fit {len(leads)} · delivered top {len(top)}")
         return top
     finally:
         if own:
