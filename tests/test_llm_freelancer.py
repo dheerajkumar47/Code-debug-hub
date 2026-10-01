@@ -228,3 +228,37 @@ def test_openai_handles_new_parameter_names_and_retired_models():
     llm = LLM("openai", "sk-x", transport=httpx.MockTransport(handler))
     assert llm.complete("s", "u") == "OK"
     assert llm.model == "gpt-5-mini" and "max_completion_tokens" in sent[-1] and "temperature" not in sent[-1]
+
+
+def test_search_drops_client_name_option_if_rejected_but_keeps_date_filter():
+    import httpx
+    from bidsmith.freelancer import FreelancerClient
+    seen = []
+
+    def handler(req: httpx.Request):
+        q = req.url.params
+        seen.append((q.get("user_display_info"), q.get("from_time")))
+        if q.get("user_display_info"):
+            return httpx.Response(400, json={"status": "error", "message": "bad param"})
+        return httpx.Response(200, json={"status": "success", "result": {"projects": [
+            {"id": 1, "title": "RAG bot", "owner_id": 7, "budget": {"minimum": 50, "maximum": 100}}],
+            "users": {"7": {"public_name": "Maria L.", "username": "ml"}}}})
+
+    c = FreelancerClient(transport=httpx.MockTransport(handler))
+    out = c.search_active("", from_time=123)
+    assert [p.id for p in out] == [1]
+    assert c._display_ok is False and c._from_time_ok is True
+    assert seen[-1] == (None, "123")  # retried without the option, date filter kept
+    c.search_active("", from_time=124)
+    assert seen[-1] == (None, "124")
+
+
+def test_search_reads_client_first_name():
+    import httpx
+    from bidsmith.freelancer import FreelancerClient
+
+    def handler(req):
+        return httpx.Response(200, json={"status": "success", "result": {"projects": [
+            {"id": 2, "title": "Chatbot", "owner_id": 9}], "users": {"9": {"public_name": "Ahmed R.", "username": "ar1"}}}})
+    p = FreelancerClient(transport=httpx.MockTransport(handler)).search_active("")[0]
+    assert p.client.name == "Ahmed"

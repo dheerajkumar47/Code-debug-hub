@@ -25,7 +25,8 @@ Hard rules:
 - Sound like an expert talking to a client: specific, confident, calm. Match the client's language level.
 
 Write it in this order:
-1. Opening (1-2 sentences): show you understood THEIR goal, using their words and details. No self-introduction.
+1. Opening (1-2 sentences): if CLIENT NAME is given, start with "Hi <name>," on its own line. Then show you
+   understood THEIR goal, using their words and one concrete detail from the brief. No self-introduction.
 2. How I will build it: 3-5 bullets with concrete technical choices for THIS project (name the tools, e.g. FastAPI,
    LangGraph, pgvector, YOLO, WhatsApp Cloud API) and how each part solves a requirement from the brief.
 3. Proof: the most relevant PROOF item - what it does and why it is close to their need - with its link.
@@ -36,7 +37,8 @@ Write it in this order:
 7. Close with a short call to action and sign as {signature}.
 Output ONLY the proposal text."""
 
-USER = """PROJECT
+USER = """CLIENT NAME: {client_name}
+PROJECT
 Title: {title}
 Type: {ptype} | Budget: {budget} | Skills: {skills}
 Description:
@@ -67,6 +69,25 @@ def _instructions_text(instr: dict) -> str:
 
 # --- ready-made (no-AI) proposal: specific to the brief and the type of project -------------------------------
 PLAYBOOKS = [
+    ("voice", r"voice ?(ai|agent|bot|assistant)|phone (agent|assistant|calls?)|call(s|ing)? (agent|bot|automation)|"
+              r"twilio|vapi|retell|ivr|speech|text.to.speech|tts|transcri",
+     ["Define the call flows: greeting, the questions callers ask most, booking and hand-off to a person",
+      "Connect telephony (Twilio or your provider) to fast speech-to-text, the LLM and natural text-to-speech",
+      "Keep replies short and low-latency, with fallbacks when the caller is unclear",
+      "Log every call with transcript and summary so your team can review and improve it"],
+     ["Roughly how many calls a day, and in which languages?", "Should the agent book appointments or only answer?"]),
+    ("automation", r"\bn8n\b|make\.com|integromat|zapier|workflow automation|automate (my|our|the)|automation workflow",
+     ["Map your current process step by step and mark where AI adds value",
+      "Build the workflow in n8n (or Make) with the AI steps calling OpenAI / Claude / Gemini",
+      "Connect your apps (Sheets, CRM, email, WhatsApp) with error handling and retries",
+      "Test with real data, then hand over with a short guide so your team can adjust it"],
+     ["Which apps does the workflow start and end in?", "Is this already running somewhere, or built from scratch?"]),
+    ("scraping", r"scrap(e|er|ing)|data extraction|extract (data|information)|crawl|lead (list|generation)|leads? from",
+     ["Confirm the exact sources and the fields you need",
+      "Build a robust extractor with retries, de-duplication and clean output",
+      "Use AI to clean, classify or enrich the records where rules aren't enough",
+      "Deliver CSV / Google Sheets output plus a script you can re-run any time"],
+     ["Which websites or sources, and roughly how many records?", "One-time run, or should it update on a schedule?"]),
     ("whatsapp", r"whats ?app|messenger|instagram dm|receptionist|appointment|booking|customer support bot",
      ["Connect the official WhatsApp Business (Cloud) API and any other channels you use",
       "Teach the assistant your services, prices and FAQs so it answers like your team",
@@ -91,6 +112,13 @@ PLAYBOOKS = [
       "Add guardrails, logging and human approval where mistakes would be costly",
       "Test on real cases, then deploy with monitoring"],
      ["Which systems or APIs must the agent connect to?", "Where should a human approve before the agent acts?"]),
+    ("webapp", r"dashboard|web ?app|saas|admin panel|portal|next\.?js|react|full.?stack|frontend",
+     ["Agree the screens and user roles, then a clickable first version early",
+      "FastAPI (or Node) backend with clean REST APIs and a proper database",
+      "React / Next.js frontend with the AI features built into the workflow, not bolted on",
+      "Auth, testing and deployment, with documented code you fully own"],
+     ["Who are the main users, and what do they do first after logging in?",
+      "Do you already have designs, or should I propose the layout?"]),
     ("ml", r"machine learning|\bml\b|model|predict|forecast|classif|regression|anomaly|data scien|dataset",
      ["Explore and clean the data and agree on the success metric",
       "Build a strong baseline, then improved models, compared with clear metrics",
@@ -156,6 +184,8 @@ def template_bid(p: Project, profile: Profile, proof, price: Price, instr: dict,
         out = []
         if instr.get("start_with"):
             out.append(instr["start_with"])
+        elif p.client.name:
+            out.append(f"Hi {p.client.name},")
         if reqs[:n_req]:
             out.append(f"I went through your brief for \"{title}\". The key points I noted:\n"
                        + "\n".join(f"• {r}" for r in reqs[:n_req]))
@@ -228,7 +258,7 @@ def write(p: Project, profile: Profile, index: PortfolioIndex, price: Price, llm
         feedback = ""
         for attempt in range(2):
             user = USER.format(
-                title=p.title, ptype=p.type, skills=", ".join(p.skills),
+                client_name=p.client.name or "unknown (no greeting name)", title=p.title, ptype=p.type, skills=", ".join(p.skills),
                 budget=f"{p.budget_min:.0f}-{p.budget_max:.0f} {p.currency}",
                 description=p.description[:4000],
                 questions="; ".join(questions) or "none", instructions=_instructions_text(instr),

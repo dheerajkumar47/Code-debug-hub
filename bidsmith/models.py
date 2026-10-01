@@ -13,6 +13,7 @@ class Client:
     rating: float = 0.0  # 0-5, employer reputation
     reviews: int = 0
     completed_projects: int = 0
+    name: str = ""  # first name for the greeting ("" when Freelancer only shows a username)
 
 
 @dataclass

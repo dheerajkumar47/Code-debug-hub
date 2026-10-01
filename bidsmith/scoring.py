@@ -39,6 +39,22 @@ ALIASES = {
     "google gemini": "gemini", "anthropic claude": "claude", "react": "react.js", "reactjs": "react.js",
     "node.js": "node.js", "data science": "machine learning", "deep learning": "machine learning",
     "tensorflow": "tensorflow", "pytorch": "pytorch", "django": "rest api", "flask": "rest api",
+    # automation platforms, voice AI and data work (Freelancer skill names)
+    "n8n": "n8n", "n8n automation": "n8n", "make.com": "make.com", "make": "make.com", "integromat": "make.com",
+    "speech recognition": "speech recognition", "voice recognition": "speech recognition",
+    "speech to text": "speech recognition", "transcription": "speech recognition", "whisper": "speech recognition",
+    "text to speech": "text to speech", "voice ai": "voice ai", "ai voice agent": "voice ai",
+    "voice agent": "voice ai", "vapi": "voice ai", "retell ai": "voice ai", "elevenlabs": "text to speech",
+    "twilio": "twilio", "web scraping": "data extraction", "data scraping": "data extraction",
+    "data extraction": "data extraction", "scrapy": "data extraction", "beautifulsoup": "data extraction",
+    "ai integration": "ai development", "ai model integration": "ai development", "ai automation": "automation",
+    "fine tuning": "large language models", "fine-tuning": "large language models",
+    "hugging face": "large language models", "huggingface": "large language models",
+    "llama": "large language models", "mistral": "large language models", "deepseek": "large language models",
+    "dialogflow": "ai chatbot", "botpress": "ai chatbot", "voiceflow": "ai chatbot", "manychat": "ai chatbot",
+    "ai chatbot": "ai chatbot", "conversational ai": "ai chatbot", "ocr": "computer vision",
+    "optical character recognition": "computer vision", "facial recognition": "computer vision",
+    "next.js": "next.js", "nextjs": "next.js", "fastapi": "fastapi", "streamlit": "streamlit",
 }
 
 
@@ -133,10 +149,13 @@ def red_flags(p: Project) -> list[str]:
 # generic tags like "Automation", "Python" or "Script" alone are not enough.
 CORE_SKILLS = {"ai development", "ai chatbot", "ai agents", "large language models", "rag", "langchain",
                "langgraph", "openai", "gemini", "claude", "computer vision", "opencv", "yolo", "machine learning",
-               "nlp", "whatsapp api", "crewai", "llamaindex", "pytorch", "tensorflow", "speech recognition"}
-CORE_TITLE = re.compile(r"\b(ai|a\.i\.|llm|gpt|chat ?gpt|chat ?bot|chatbot|agent|agents|agentic|rag|langchain|"
-                        r"langgraph|openai|gemini|claude|machine learning|ml|deep learning|computer vision|"
-                        r"vision|yolo|opencv|nlp|whatsapp|voice ?bot|voice ai|ocr|detection|embedding|vector)\b", re.I)
+               "nlp", "whatsapp api", "crewai", "llamaindex", "pytorch", "tensorflow", "speech recognition",
+               "text to speech", "voice ai", "n8n", "make.com", "data extraction"}
+CORE_TITLE = re.compile(r"\b(ai|a\.i\.|llm|llms|gpt|chat ?gpt|chat ?bot|chatbot|agent|agents|agentic|rag|langchain|"
+                        r"langgraph|openai|gemini|claude|deepseek|llama|machine learning|ml|deep learning|"
+                        r"computer vision|vision|yolo|opencv|nlp|whatsapp|voice ?bot|voice ai|voice agent|ocr|"
+                        r"detection|embedding|embeddings|vector|n8n|make\.com|speech|transcription|transcribe|"
+                        r"text.to.speech|tts|scraper|scraping|data extraction|fine.?tun(e|ing)|prompt)\b", re.I)
 
 
 def has_core_need(p: Project) -> bool:

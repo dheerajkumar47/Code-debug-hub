@@ -45,6 +45,7 @@ class FreelancerClient:
         self._auth: dict | None = None
         self._self_id: int | None = None
         self._from_time_ok = True  # switched off automatically if the API ever rejects the filter
+        self._display_ok = True    # same for the client-name option
         self._auth_failed_at = 0.0
         self.auth_error = "" if token else "no Freelancer token"
 
@@ -120,6 +121,21 @@ class FreelancerClient:
             ("user_details", "true"), ("user_country_details", "true"),
             ("user_status", "true"), ("user_employer_reputation", "true"),
         ]
+        if self._display_ok:
+            params.append(("user_display_info", "true"))  # public name for a personal greeting
+        from_time_was_ok = self._from_time_ok
+        try:
+            return self._search(params, job_ids, project_types, from_time)
+        except FreelancerError as e:
+            if not self._display_ok or (" 400" not in str(e) and " 422" not in str(e)):
+                raise
+            log.warning("Freelancer rejected the client-name option; searching without it (%s)", e)
+            self._display_ok = False
+            self._from_time_ok = from_time_was_ok  # the date filter was not the problem: keep it
+            return self._search([x for x in params if x[0] != "user_display_info"], job_ids, project_types, from_time)
+
+    def _search(self, params: list, job_ids, project_types, from_time) -> list[Project]:
+        params = list(params)
         params += [("jobs[]", j) for j in job_ids]
         params += [("project_types[]", t) for t in project_types]
         if from_time and self._from_time_ok:
@@ -217,5 +233,16 @@ def parse_project(p: dict, users: dict, site_url: str = "https://www.freelancer.
             rating=_f(rep.get("overall")),
             reviews=int(rep.get("reviews") or 0),
             completed_projects=int(rep.get("complete") or 0),
+            name=first_name(owner),
         ),
     )
+
+
+def first_name(owner: dict) -> str:
+    """'John D.' / 'Sarah Khan' → 'John' / 'Sarah'. Usernames like 'techguy88' give '' (no fake greeting)."""
+    for key in ("public_name", "display_name"):
+        raw = str(owner.get(key) or "").strip()
+        word = raw.split()[0] if raw else ""
+        if raw and raw != owner.get("username") and word.isalpha() and len(word) >= 2:
+            return word[:1].upper() + word[1:].lower()
+    return ""

@@ -210,14 +210,16 @@ class BidSmith:
         since = int(max(last - 120, now - self.s.lookback_minutes * 60) if last else now - self.s.lookback_minutes * 60)
         types = self.profile.search.get("project_types", [])
         found: dict[int, Project] = {}
+        feed_ok = False
         try:
-            for page in range(3):
+            for page in range(5):  # up to 500 new projects per cycle (bursts after a restart or outage)
                 batch = self.client.search_active("", project_types=types, limit=100, offset=page * 100, from_time=since)
                 for p in batch:
                     found.setdefault(p.id, p)
                 if len(batch) < 100:
                     break
-        except FreelancerError as e:
+            feed_ok = True
+        except Exception as e:  # network or API error: retry the same time window next cycle
             log.error("live feed failed: %s", e)
         queries = self.profile.search.get("queries") or []
         if queries:  # safety net: one skill keyword per cycle, rotating
@@ -227,7 +229,7 @@ class BidSmith:
                 for p in self.client.search_active(queries[i % len(queries)], project_types=types,
                                                    limit=50, from_time=since):
                     found.setdefault(p.id, p)
-            except FreelancerError as e:
+            except Exception as e:
                 log.error("keyword search failed: %s", e)
         stats = self.process(list(found.values()), now)
         stats["expired"] = self.refresh_open_cards()
@@ -235,7 +237,8 @@ class BidSmith:
         stats["scanned"] = len(found)
         self._count_today("checked", stats["new"])
         self._count_today("matched", stats["pending"])
-        self.store.kv_set("last_poll", str(now))
+        if feed_ok:  # never move the window forward past projects we failed to fetch
+            self.store.kv_set("last_poll", str(now))
         self.remember_model()
         return stats
 

@@ -143,3 +143,59 @@ def test_experience_years_copied_from_brief_are_rejected(profile):
     assert any("experience claim" in i for i in r.issues), r.issues
     ok = quality.check(text.replace("My PHP experience is 5+ years, AI", "AI"), p, "", {"min_words": 5, "max_words": 300})
     assert not any("experience claim" in i for i in ok.issues)
+
+
+def _proj(title, desc, skills):
+    from bidsmith.models import Client, Project
+    return Project(id=9, title=title, description=desc, url="u", budget_min=100, budget_max=300, bid_count=6,
+                   bid_avg=200, skills=skills, time_submitted=int(NOW - 600), client=Client(payment_verified=True))
+
+
+def test_field_includes_automation_voice_scraping_but_not_unrelated_work(profile):
+    idx = PortfolioIndex(profile.portfolio)
+    want = [_proj("n8n workflow for invoice processing", "Build an n8n flow that logs invoices to Sheets.",
+                  ["n8n", "Automation", "Google Sheets"]),
+            _proj("Web scraper for real estate listings", "Scrape listings daily into a database.",
+                  ["Web Scraping", "Python", "Data Extraction"]),
+            _proj("Voice AI agent for dental clinic calls", "AI voice agent with Twilio that books appointments.",
+                  ["Twilio", "Artificial Intelligence", "Voice Recognition"]),
+            _proj("Text to speech narration for e-learning", "Generate natural narration audio.",
+                  ["Text to Speech", "Python"])]
+    skip = [_proj("Excel VBA macro for reports", "Automate monthly report in Excel VBA.", ["Excel", "VBA", "Automation"]),
+            _proj("Laravel e-commerce bug fixes", "Fix checkout bugs.", ["PHP", "Laravel", "MySQL"]),
+            _proj("Mobile app UI in Flutter", "Build Flutter screens from Figma.", ["Flutter", "Mobile App Development"]),
+            _proj("Shopify product listing", "List 100 products.", ["Shopify", "Product Descriptions"])]
+    for p in want:
+        assert heuristic_score(p, profile, idx, NOW).score >= 60, p.title
+    for p in skip:
+        assert heuristic_score(p, profile, idx, NOW).score < 60, p.title
+
+
+def test_client_first_name_greeting_and_type_playbooks(profile):
+    from bidsmith import proposal
+    from bidsmith.freelancer import first_name
+    from bidsmith.models import Price
+    assert first_name({"public_name": "John D.", "username": "jd88"}) == "John"
+    assert first_name({"public_name": "techguy88", "username": "techguy88"}) == ""
+    assert first_name({"display_name": "sarah khan"}) == "Sarah"
+    assert first_name({}) == ""
+    p = _proj("Voice AI agent for clinic calls", "We need an AI voice agent with Twilio that answers calls.",
+              ["Twilio", "Artificial Intelligence"])
+    p.client.name = "Sarah"
+    d = proposal.write(p, profile, PortfolioIndex(profile.portfolio), Price(250, 7, "USD", 250, ""), llm=None)
+    assert d.text.startswith("Hi Sarah,") and "speech-to-text" in d.text and len(d.text) <= 1500
+    p2 = _proj("Scrape business directory", "Need data extraction from 3 directories into Google Sheets.",
+               ["Web Scraping", "Data Extraction"])
+    d2 = proposal.write(p2, profile, PortfolioIndex(profile.portfolio), Price(150, 5, "USD", 150, ""), llm=None)
+    assert "de-duplication" in d2.text and not d2.text.startswith("Hi ")
+
+
+def test_feed_failure_does_not_skip_the_time_window(make_bot):
+    bot = make_bot()
+    bot.store.kv_set("last_poll", "1000")
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+    bot.client.search_active = boom
+    bot.run_live()
+    assert bot.store.kv_get("last_poll") == "1000"
