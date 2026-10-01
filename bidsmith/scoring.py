@@ -150,15 +150,33 @@ def red_flags(p: Project) -> list[str]:
 CORE_SKILLS = {"ai development", "ai chatbot", "ai agents", "large language models", "rag", "langchain",
                "langgraph", "openai", "gemini", "claude", "computer vision", "opencv", "yolo", "machine learning",
                "nlp", "whatsapp api", "crewai", "llamaindex", "pytorch", "tensorflow", "speech recognition",
-               "text to speech", "voice ai", "n8n", "make.com", "data extraction"}
+               "text to speech", "voice ai", "n8n", "make.com"}
 CORE_TITLE = re.compile(r"\b(ai|a\.i\.|llm|llms|gpt|chat ?gpt|chat ?bot|chatbot|agent|agents|agentic|rag|langchain|"
                         r"langgraph|openai|gemini|claude|deepseek|llama|machine learning|ml|deep learning|"
                         r"computer vision|vision|yolo|opencv|nlp|whatsapp|voice ?bot|voice ai|voice agent|ocr|"
                         r"detection|embedding|embeddings|vector|n8n|make\.com|speech|transcription|transcribe|"
-                        r"text.to.speech|tts|scraper|scraping|data extraction|fine.?tun(e|ing)|prompt)\b", re.I)
+                        r"text.to.speech|tts|fine.?tun(e|ing)|prompt)\b", re.I)
+
+# Not your field even when tagged with an AI skill: job roles (bidding / account / sales / marketing work),
+# content & media creation, and scraping-only jobs...
+OFF_FIELD = re.compile(
+    r"\b(proposal writ\w*|bidder|bidding|bid writ\w*|account manag\w*|portfolio manag\w*|profile manag\w*|"
+    r"virtual assistant|personal assistant|\bva\b|sales (rep\w*|executive|manager|partner|agent needed|person)|"
+    r"business develop\w*|\bbde\b|cold call\w*|telemarket\w*|recruit\w*|digital marketing|social media (manag\w*|"
+    r"market\w*|post\w*)|marketing (manag\w*|specialist|expert|executive)|seo|content (writ\w*|creat\w*)|"
+    r"copywrit\w*|ghostwrit\w*|article|blog|video (edit\w*|generat\w*|creat\w*|production)|ai video|"
+    r"youtube|tiktok|reels?|shorts|thumbnail|voice ?over|ai art|image generat\w*|midjourney|graphic design\w*|"
+    r"logo|data entry|scrap(e|er|ers|ing)|selenium|crawler)\b", re.I)
+# ...unless the title clearly asks for real AI engineering.
+STRONG_AI = re.compile(r"\b(llm|llms|(chat ?)?gpt[- ]?(api|integration)|chat ?bot|chatbot|agent|agents|agentic|rag|"
+                       r"langchain|langgraph|"
+                       r"openai|gemini|claude|machine learning|deep learning|computer vision|yolo|opencv|nlp|"
+                       r"voice ai|voice agent|n8n|fine.?tun(e|ing)|api integration)\b", re.I)
 
 
 def has_core_need(p: Project) -> bool:
+    if OFF_FIELD.search(p.title) and not STRONG_AI.search(p.title):
+        return False
     return any(_norm(t) in CORE_SKILLS for t in p.skills) or bool(CORE_TITLE.search(p.title))
 
 

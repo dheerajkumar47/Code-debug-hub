@@ -140,7 +140,7 @@ search:
   # Backup search (the live feed already sees every new project); one query per cycle, rotating.
   queries: ["RAG", "chatbot", "AI agent", "LangChain", "LLM", "OpenAI", "WhatsApp bot",
             "computer vision", "YOLO", "FastAPI", "AI automation", "n8n", "voice AI", "GPT",
-            "Gemini", "Claude", "machine learning", "AI integration", "speech to text", "data extraction"]
+            "Gemini", "Claude", "machine learning", "AI integration", "speech to text"]
   job_ids: []               # optional Freelancer skill IDs to narrow search
   project_types: [fixed, hourly]
   min_budget_usd: 30

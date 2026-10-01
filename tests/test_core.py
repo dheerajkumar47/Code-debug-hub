@@ -155,8 +155,6 @@ def test_field_includes_automation_voice_scraping_but_not_unrelated_work(profile
     idx = PortfolioIndex(profile.portfolio)
     want = [_proj("n8n workflow for invoice processing", "Build an n8n flow that logs invoices to Sheets.",
                   ["n8n", "Automation", "Google Sheets"]),
-            _proj("Web scraper for real estate listings", "Scrape listings daily into a database.",
-                  ["Web Scraping", "Python", "Data Extraction"]),
             _proj("Voice AI agent for dental clinic calls", "AI voice agent with Twilio that books appointments.",
                   ["Twilio", "Artificial Intelligence", "Voice Recognition"]),
             _proj("Text to speech narration for e-learning", "Generate natural narration audio.",
@@ -199,3 +197,24 @@ def test_feed_failure_does_not_skip_the_time_window(make_bot):
     bot.client.search_active = boom
     bot.run_live()
     assert bot.store.kv_get("last_poll") == "1000"
+
+
+def test_roles_content_and_scraping_jobs_are_not_your_field(profile):
+    idx = PortfolioIndex(profile.portfolio)
+    off = [_proj("Freelance Proposal Writer & Account Manager", "Write proposals and manage our Freelancer account.",
+                 ["Web Development", "Proposal Writing", "ChatGPT"]),
+           _proj("Freelance Bidder & Portfolio Manager Needed", "Bid on projects for our agency and manage portfolio.",
+                 ["Chatbot", "Project Management"]),
+           _proj("Web Scraping Expert Needed | Real-World Scraping Experience", "Scrape e-commerce sites with Selenium.",
+                 ["Selenium", "Web Scraping", "Python"]),
+           _proj("AI Social Video Generator", "Generate short social videos with AI tools.",
+                 ["AI Video", "Video Editing", "Artificial Intelligence"]),
+           _proj("Virtual Assistant for ChatGPT content", "Daily posts with ChatGPT.", ["ChatGPT", "Virtual Assistant"])]
+    for p in off:
+        assert heuristic_score(p, profile, idx, NOW).score < 60, p.title
+    still = [_proj("AI chatbot for our sales team", "Chatbot that answers sales questions from our CRM.",
+                   ["AI Chatbot", "OpenAI"]),
+             _proj("LLM agent that summarizes YouTube videos", "Agent pulls transcripts and summarizes them.",
+                   ["Python", "OpenAI"])]
+    for p in still:
+        assert heuristic_score(p, profile, idx, NOW).score >= 60, p.title
