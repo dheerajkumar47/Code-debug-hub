@@ -209,6 +209,8 @@ def test_roles_content_and_scraping_jobs_are_not_your_field(profile):
                  ["Selenium", "Web Scraping", "Python"]),
            _proj("AI Social Video Generator", "Generate short social videos with AI tools.",
                  ["AI Video", "Video Editing", "Artificial Intelligence"]),
+           _proj("Dental Clinic Professionals: AI Patient Management Feedback Needed", "Licensed dentists only.",
+                 ["AI Chatbot", "AI Development", "Usability Testing", "User Research"]),
            _proj("Virtual Assistant for ChatGPT content", "Daily posts with ChatGPT.", ["ChatGPT", "Virtual Assistant"])]
     for p in off:
         assert heuristic_score(p, profile, idx, NOW).score < 60, p.title

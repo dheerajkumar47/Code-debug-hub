@@ -166,7 +166,8 @@ OFF_FIELD = re.compile(
     r"market\w*|post\w*)|marketing (manag\w*|specialist|expert|executive)|seo|content (writ\w*|creat\w*)|"
     r"copywrit\w*|ghostwrit\w*|article|blog|video (edit\w*|generat\w*|creat\w*|production)|ai video|"
     r"youtube|tiktok|reels?|shorts|thumbnail|voice ?over|ai art|image generat\w*|midjourney|graphic design\w*|"
-    r"logo|data entry|scrap(e|er|ers|ing)|selenium|crawler)\b", re.I)
+    r"logo|data entry|scrap(e|er|ers|ing)|selenium|crawler|feedback needed|usability|user research|survey|"
+    r"beta test\w*|testers? needed|professionals?:)\b", re.I)
 # ...unless the title clearly asks for real AI engineering.
 STRONG_AI = re.compile(r"\b(llm|llms|(chat ?)?gpt[- ]?(api|integration)|chat ?bot|chatbot|agent|agents|agentic|rag|"
                        r"langchain|langgraph|"
