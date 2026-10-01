@@ -7,7 +7,8 @@
 
 1. Double-click **`start.bat`** as usual and leave it open.
 2. Double-click **`phone.bat`**. The first time, it downloads Cloudflare Tunnel (about 1 minute).
-3. In the window, find the line with **`https://something-random.trycloudflare.com`**.
+3. It checks the bot is running, then shows **YOUR PHONE LINK** in green (`https://something.trycloudflare.com`).
+   The link is also copied: paste it into WhatsApp to yourself and open it on your phone.
 4. Open that link on your phone → log in with **owner** + your dashboard password.
 5. Chrome **⋮ → Add to Home screen** so it's one tap next time.
 
